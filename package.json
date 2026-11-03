@@ -1,0 +1,58 @@
+{
+  "name": "dsh-restart-and-update",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Restart DeepSeek Harness and update its plugins from the sidebar: a full relaunch that survives the Windows console trap, plugin updates with publish dates, and a one-click way back into the plugin market.",
+  "icon": "./icon.svg",
+  "license": "MIT",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale/*.json",
+    "README.md",
+    "README.en.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "restart",
+    "plugin-manager",
+    "cordis"
+  ],
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.2.0-rc.1 <0.3.0-0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dolacmeo/dsh-restart-and-update.git"
+  },
+  "homepage": "https://github.com/dolacmeo/dsh-restart-and-update#readme",
+  "bugs": {
+    "url": "https://github.com/dolacmeo/dsh-restart-and-update/issues"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-slots"
+      ]
+    }
+  }
+}

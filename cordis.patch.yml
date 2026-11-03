@@ -1,0 +1,5 @@
+# Inserts the restart plugin: the Host half owns the relaunch route, the Client
+# half draws the sidebar entry and the confirmation dialog.
+- insert:
+    - id: dsh-restart-and-update
+      name: 'dsh-restart-and-update'
