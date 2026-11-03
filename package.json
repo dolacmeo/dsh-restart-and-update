@@ -38,6 +38,10 @@
     "type": "git",
     "url": "git+https://github.com/dolacmeo/dsh-restart-and-update.git"
   },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org",
+    "access": "public"
+  },
   "homepage": "https://github.com/dolacmeo/dsh-restart-and-update#readme",
   "bugs": {
     "url": "https://github.com/dolacmeo/dsh-restart-and-update/issues"

@@ -1,0 +1,50 @@
+name: release
+
+# Publishing from CI keeps the npm token out of any local shell and makes a
+# release reproducible: tag the commit, and the same tree that is on GitHub is
+# the one that lands on the registry.
+#
+# Setup once: create an npm "Automation" token and store it as the repository
+# secret NPM_TOKEN (Settings → Secrets and variables → Actions).
+# Note the registry below: it is deliberately the official one. A local
+# .npmrc pointing at a mirror (npmmirror/cnpm) does not affect this workflow.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write # provenance, so consumers can verify the tarball's origin
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Check the tag matches package.json
+        run: |
+          pkg="$(node -p "require('./package.json').version")"
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$pkg" != "$tag" ]; then
+            echo "tag $GITHUB_REF_NAME does not match package.json $pkg" >&2
+            exit 1
+          fi
+
+      - name: Syntax check
+        run: |
+          node --check index.js
+          node --check client.js
+
+      - name: Publish
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -111,9 +111,30 @@ DSH 插件：侧栏底部动作行里的「重启」+「更新插件」两个按
   - 文案走 `ctx.locale.register` + `bind`，zh/en 两套
   - 样式全部 `--dsw-alias-*` 主题变量，无硬编码配色
 
-## 源码位置
+## 安装
 
-`C:\Users\dolacmeo\.AgentWorkspace\cli\plugins\dsh-restart-and-update\`
+```sh
+dsh plugin add dsh-restart-and-update
+```
 
-安装/更新：`plugin_manager install_bundle`，target 指向本目录。
-替换已安装包需要重启（新 JS 模块代际），这也是本插件存在的理由之一。
+版本兼容：Node.js 20+，dsh `>=0.2.0-rc.1 <0.3.0-0`。
+「完全重启」目前只在 Windows 上有实现；「重启GUI」各平台都可用。
+
+## 开发
+
+```sh
+git clone https://github.com/dolacmeo/dsh-restart-and-update.git
+dsh plugin add <克隆下来的目录>
+```
+
+改 Host 半（`index.js`）后需要卸载重装以换掉已加载的模块代际：
+`dsh plugin remove dsh-restart-and-update` 然后重新 add。
+
+## 发布
+
+`package.json` 里写死了 `publishConfig.registry = https://registry.npmjs.org`，
+所以本机 `.npmrc` 指向镜像（npmmirror / cnpm）也不会把包发错地方 ——
+**npmmirror 是官方 npm 的只读镜像，不承接发布**，发到官方之后它自己会同步。
+
+发布走 CI（`.github/workflows/release.yml`）：仓库里配好 `NPM_TOKEN` secret 后，
+打 `v*` 标签即自动 `npm publish --provenance`，并先校验标签与 `package.json` 版本一致。
