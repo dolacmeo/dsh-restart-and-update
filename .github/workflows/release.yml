@@ -1,13 +1,12 @@
 name: release
 
-# Publishing from CI keeps the npm token out of any local shell and makes a
-# release reproducible: tag the commit, and the same tree that is on GitHub is
-# the one that lands on the registry.
+# Publishing stays manual: npm writes on this account require 2FA, and a token
+# would only live 90 days. This workflow therefore does NOT publish — it verifies
+# that the tag matches the manifest and turns the tag into a GitHub Release.
 #
-# Setup once: create an npm "Automation" token and store it as the repository
-# secret NPM_TOKEN (Settings → Secrets and variables → Actions).
-# Note the registry below: it is deliberately the official one. A local
-# .npmrc pointing at a mirror (npmmirror/cnpm) does not affect this workflow.
+# If publishing from CI is ever wanted, add an npm Automation token as the
+# NPM_TOKEN secret and append a publish step; do not add it silently here, or a
+# tag will look like it released something when nothing reached the registry.
 
 on:
   push:
@@ -16,11 +15,10 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
-  id-token: write # provenance, so consumers can verify the tarball's origin
+  contents: write # creating the release
 
 jobs:
-  publish:
+  verify-and-release:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,23 +26,68 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: https://registry.npmjs.org
 
-      - name: Check the tag matches package.json
+      - name: The tag must match package.json
         run: |
           pkg="$(node -p "require('./package.json').version")"
           tag="${GITHUB_REF_NAME#v}"
           if [ "$pkg" != "$tag" ]; then
-            echo "tag $GITHUB_REF_NAME does not match package.json $pkg" >&2
+            echo "tag $GITHUB_REF_NAME does not match package.json version $pkg" >&2
             exit 1
           fi
+          echo "version $pkg matches $GITHUB_REF_NAME"
 
       - name: Syntax check
         run: |
           node --check index.js
           node --check client.js
+          node -e "for (const f of ['package.json','locale/zh.json','locale/en.json']) JSON.parse(require('fs').readFileSync(f,'utf8')); console.log('json ok')"
 
-      - name: Publish
-        run: npm publish --provenance --access public
+      - name: The bundle manifest must be present
+        run: |
+          node -e "
+          const p = require('./package.json');
+          if (!p.dsh || !p.dsh.bundle || !p.dsh.bundle.patch) {
+            console.error('package.json is missing dsh.bundle.patch — the package would not be installable');
+            process.exit(1);
+          }
+          console.log('dsh.bundle.patch =', p.dsh.bundle.patch);
+          "
+
+      - name: Report whether the version is on the registry
+        run: |
+          pkg="$(node -p "require('./package.json').version")"
+          code="$(curl -s -o /dev/null -w '%{http_code}' "https://registry.npmjs.org/$(node -p "require('./package.json').name")")"
+          if [ "$code" = "200" ]; then
+            published="$(npm view "$(node -p "require('./package.json').name")@$pkg" version 2>/dev/null || true)"
+          else
+            published=""
+          fi
+          if [ "$published" = "$pkg" ]; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "version $pkg is on npm"
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::version $pkg is NOT on npm yet — upload it by hand with 'npm publish'"
+          fi
+        id: registry
+
+      - name: Create the GitHub Release
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          name="$(node -p "require('./package.json').name")"
+          version="$(node -p "require('./package.json').version")"
+          {
+            echo "Built from commit \`$GITHUB_SHA\`."
+            echo
+            echo "Install: \`dsh plugin add $name\`"
+            echo
+            if [ "${{ steps.registry.outputs.published }}" = "true" ]; then
+              echo "npm: \`$name@$version\` is published."
+            else
+              echo "> **Not on npm yet.** This version still needs a manual \`npm publish\`;"
+              echo "> \`dsh plugin add $name\` will fetch whatever is on the registry, not this tag."
+            fi
+          } > "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" --verify-tag
