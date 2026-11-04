@@ -1,0 +1,8 @@
+# Keep every checkout byte-identical to the published tarball.
+# Without this, Windows checkouts turn LF into CRLF and every file reports a
+# different hash than the npm package even though the content is the same.
+* text=auto eol=lf
+
+# Files that must never be normalised.
+*.svg binary
+*.png binary
