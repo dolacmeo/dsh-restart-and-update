@@ -43,6 +43,40 @@ DSH 插件：侧栏底部动作行里的「重启」+「更新插件」两个按
 | 完全重启 | Host 路由 `POST /dsh-restart-and-update/restart` 拉起一个脱离进程树的 PowerShell worker：可选先跑一次插件更新 → `taskkill /T /F` 杀掉整个应用 → 重新启动 `DeepSeek Harness.exe` | 整个应用重启，后端一起重启；日志落在 `%TEMP%\dsh-restart-and-update\restart-*.log` |
 | 取消 | 关闭弹窗 | 无 |
 
+## 记住窗口位置
+
+桌面壳自己不会记窗口位置：每次都把 BrowserWindow 建成 `1280×820`，而且没有任何窗口几何的 IPC
+（`DESKTOP_IPC` 里只有文件/剪贴板/主题这一路通道，Host↔Electron 的 IPC 也只有 `shutdown`、
+`file-drag-*`、`quit-inspection`、`update-tasks`、`ready`）。所以「完全重启」之后窗口总掉回默认角落。
+这个插件顺手把它补上了：
+
+- **怎么拿到窗口**：Host 就是 Desktop Host 进程，`process.ppid` 是 Electron 主进程，
+  用 `FindWindowExW` 枚举它的 `Chrome_WidgetWin_1` 就是主窗口；测量和移动都走 `user32.dll`
+  （桌面版自带的 koffi），不读 DSH 内部结构，升级不受影响。
+- **为什么不闪**：主窗口在 Host 启动**之前**就以 `show: false` 创建，Host ready 之后才 `show()`，
+  恢复发生在窗口还没显示的时候。上次是最大化就先铺满工作区，窗口可见的一瞬间再
+  `ShowWindow(SW_MAXIMIZE)`，不会先闪一个小窗口。
+- **怎么记**：窗口可见时每 250ms 采样 `GetWindowRect`/`IsZoomed`（隐藏、最小化时跳过），
+  变化后 800ms 原子写入 `~/.dsh/window-state.json`（`DSH_HOME` 生效时跟着走），Host 退出时再存一次。
+- **坐标系**：状态文件里是物理像素（宿主是 per-monitor DPI 感知的），读和写同一套坐标，不换算。
+  显示器变了会自动收敛：矩形至少要有 160×120 落在某个工作区内，否则居中，尺寸不超过工作区。
+- **兜底**：所有 Win32 调用都在 `try/catch` 里，连续失败 20 次就停止采样。插件里未捕获的异常会
+  带走整个 Host，所以这段代码不允许有异常逃出去。
+- **范围**：仅 Windows 桌面版。直接用 `node` 跑的 CLI 宿主没有 Desktop 窗口，这段逻辑不会启动。
+  删掉状态文件只是忘掉位置；要彻底关掉就停用本插件。
+
+`GET /dsh-restart-and-update/state` 多返回一个 `windowState` 字段（`bounds` / `maximized` / `stateFile` / `found`），
+排查时可以直接看。状态文件长这样：
+
+```json
+{
+  "version": 1,
+  "updatedAt": "2026-11-09T08:13:00.000Z",
+  "bounds": { "x": 2, "y": 11, "width": 2076, "height": 2078 },
+  "maximized": false
+}
+```
+
 ## 插件市场
 
 没有待更新插件时，第二个按钮变成「插件市场」；更新弹窗里也有同样的入口。
@@ -100,7 +134,7 @@ DSH 插件：侧栏底部动作行里的「重启」+「更新插件」两个按
 ## 实现
 
 - Host 半 `index.js`：`webServer.register` 五条 exact 路由
-  - `GET  /dsh-restart-and-update/state`   → 平台、exe、`canRestart`、profile、`marketInstalled` / `marketVersion`
+  - `GET  /dsh-restart-and-update/state`   → 平台、exe、`canRestart`、profile、`marketInstalled` / `marketVersion`、`windowState`
   - `GET  /dsh-restart-and-update/updates` → 更新清单（含发布时间、`needsRestart` 分类）
   - `POST /dsh-restart-and-update/update`  → 执行更新
   - `POST /dsh-restart-and-update/install-market` → 安装 dshmarket（市场缺失时按钮触发）
@@ -118,6 +152,11 @@ DSH 插件：侧栏底部动作行里的「重启」+「更新插件」两个按
     `consoleWindow` 与 worker 相同；WMI 路径 `attachParent=False, consoleWindow=0`。
   - worker 还会 `ShowWindow(GetConsoleWindow(), SW_HIDE)` 作为第二道保险。
   - `Start-Process` 只作最后兜底：它会把 worker 的 console 传给应用，只在 WMI 创建失败时使用。
+- 窗口记忆 `lib/window-state.js`：koffi 绑定 `user32`（FindWindowExW / GetWindowRect / SetWindowPos /
+  IsZoomed / ShowWindow / MonitorFromRect），启动时在窗口隐藏期间恢复，之后 250ms 采样、800ms 防抖落盘；
+  状态文件 `~/.dsh/window-state.json`。所有调用都在 try/catch 内，采样连续失败 20 次自动停。
+- 单测 `npm test`（`test/window-state.test.mjs`，7 条，不需要 Windows 窗口，注入假 Win32 面）：
+  工作区收敛、坏状态文件、首次启动种状态、隐藏窗口恢复、异常吞噬、隐藏窗口不记录。
 - Client 半 `client.js`：`window.__ModuleLoader__.load`
   - 槽位：`sidebar.footer.action`（两按钮，order 1000）、`shell.overlay`（重启弹窗 order 900、
     更新弹窗 order 901、市场浮层 order 902）

@@ -1,8 +1,8 @@
 {
   "name": "dsh-restart-and-update",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "type": "module",
-  "description": "Restart DeepSeek Harness and update its plugins from the sidebar: verified updates with publish dates, and a restart that survives the Windows console trap. · 侧栏一键更新插件与重启 Harness。",
+  "description": "Restart DeepSeek Harness, update its plugins, and keep the window where you left it: verified updates with publish dates, plus a restart that survives the Windows console trap. · 侧栏一键更新插件与重启 Harness，并记住窗口位置。",
   "icon": "./icon.svg",
   "license": "MIT",
   "main": "index.js",
@@ -15,6 +15,7 @@
   "files": [
     "index.js",
     "client.js",
+    "lib/*.js",
     "cordis.patch.yml",
     "icon.svg",
     "locale/*.json",
@@ -28,7 +29,9 @@
     "deepseek-harness",
     "restart",
     "plugin-manager",
-    "cordis"
+    "cordis",
+    "window",
+    "koffi"
   ],
   "engines": {
     "node": ">=20",
@@ -58,5 +61,8 @@
         "@deepseek-ai/dsh-client-ui-slots"
       ]
     }
+  },
+  "scripts": {
+    "test": "node --test test/window-state.test.mjs"
   }
 }

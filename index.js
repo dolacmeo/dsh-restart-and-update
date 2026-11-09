@@ -20,6 +20,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
+import { startWindowState } from './lib/window-state.js'
 
 const PREFIX = '/dsh-restart-and-update'
 const WORK_DIR = join(tmpdir(), 'dsh-restart-and-update')
@@ -778,6 +779,33 @@ async function startRelaunch(updateCommand = '') {
 export const inject = ['webServer']
 
 export function apply(ctx) {
+  /* The shell always opens its window at 1280x820 and exposes no window-geometry
+     IPC, so a full restart used to drop the user into the default corner. The
+     Desktop shell is this Host's parent, so the window can be measured and moved
+     through Win32 instead: restore it before it is first shown, then keep
+     recording. Disabled anywhere else, where there is no Desktop window. */
+  let windowGeometry = null
+  if (RESTARTABLE) {
+    ctx.effect(() => {
+      let log
+      try {
+        log = ctx.logger('window-geometry')
+      } catch {}
+      try {
+        windowGeometry = startWindowState({ log }) ?? null
+      } catch (error) {
+        windowGeometry = null
+        log?.warn?.('window geometry could not start: '
+          + (error instanceof Error ? error.message : String(error)))
+      }
+      return async () => {
+        const handle = windowGeometry
+        windowGeometry = null
+        await handle?.dispose()
+      }
+    }, 'restart-plugin: window geometry')
+  }
+
   const state = () => ({
     ok: true,
     plugin: 'dsh-restart-and-update',
@@ -786,6 +814,7 @@ export function apply(ctx) {
     canRestart: RESTARTABLE,
     pid: process.pid,
     selfHostPackage: SELF_HOST_PACKAGE,
+    windowState: windowGeometry?.snapshot() ?? null,
   })
 
   /* One package operation at a time. Two simultaneous pnpm runs can corrupt a

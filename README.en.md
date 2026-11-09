@@ -39,6 +39,7 @@ GUI-subsystem stand-in that calls `AttachConsole`: the child path came back
 | **Restart or reload?** | Decided by the same rule the market uses (`hasHostHalf`): a package with only `dsh.client` is browser code and takes effect on reload; anything with a Host half needs the full restart. |
 | **The market itself** | `dshmarket` cannot replace its own running bundle, so a full restart hands that one update to the detached worker, which runs it *before* the process dies — and skips the step entirely when there is nothing newer. |
 | **Market entry point** | With no updates pending, the second button opens the market in a sheet of this plugin's own, using the market's published `market.render()` service. The update dialog has the same entry. If the market is not installed, the sheet offers to install it. |
+| **Window position** | A full restart lands back where the window was. The shell always opens at 1280×820 and has no window-geometry IPC, so the Host measures and moves the window through Win32 (`user32.dll` via the bundled koffi): it restores the geometry while the window is still hidden, before the first `show()`, then samples every 250 ms while the window is visible and writes debounced changes to `$DSH_HOME/window-state.json`. Windows desktop only; physical pixels, matching the DPI-aware Host. |
 
 ## API
 
@@ -53,6 +54,17 @@ fails and the header doubles as a CSRF guard. Every route also checks `Origin` a
 | `POST /update` | `{"names":[...]}` |
 | `POST /install-market` | install `dshmarket` |
 | `POST /restart` | relaunch the app (`{"updateSelf":false}` skips the market self-update) |
+
+## Tests
+
+```bash
+npm test   # node --test test/window-state.test.mjs
+```
+
+Seven checks over the window-geometry state machine with an injected Win32 surface: work-area
+fitting, unreadable state files, the first run (which must seed state instead of dereferencing a
+null baseline), restore while hidden, swallowed Win32 failures, and hidden windows never being
+recorded.
 
 ## Requirements
 
