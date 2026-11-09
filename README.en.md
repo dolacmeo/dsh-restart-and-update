@@ -2,10 +2,16 @@
 
 [中文说明](README.md)
 
-A DeepSeek Harness (dsh) plugin that puts **Restart** and **Plugins** in the sidebar foot.
+One-click plugin updates and restart for DeepSeek Harness, from the sidebar.
 
-Two buttons share one row. Restart is on the left; the second button shows pending plugin
-updates and turns into a plugin-market entry when there is nothing to update.
+The update button carries a count, opens a list of every plugin's current and new version with
+publish dates, and turns into **Restart** when the batch is done. With nothing to update it is a
+plugin-market entry.
+
+| Updates | After updating → restart |
+|---|---|
+| ![Update dialog, light](https://raw.githubusercontent.com/dolacmeo/dsh-restart-and-update/HEAD/assets/screenshot-1-updates-light.png) | ![Restart button after updating](https://raw.githubusercontent.com/dolacmeo/dsh-restart-and-update/HEAD/assets/screenshot-3-after-update.png) |
+| ![Update dialog, dark](https://raw.githubusercontent.com/dolacmeo/dsh-restart-and-update/HEAD/assets/screenshot-2-updates-dark.png) | ![Restart dialog, dark](https://raw.githubusercontent.com/dolacmeo/dsh-restart-and-update/HEAD/assets/screenshot-4-restart-dark.png) |
 
 ## Why this one
 
@@ -29,7 +35,7 @@ GUI-subsystem stand-in that calls `AttachConsole`: the child path came back
 |---|---|
 | **Restart** | Dialog with `Restart GUI` / `Restart everything` / `Cancel`. GUI restart reloads the page only; a full restart kills and relaunches the whole app. |
 | **Badges** | Green count on the second button = plugins with a newer version available. Orange count on Restart = updates **applied or queued** whose new code is not loaded yet. These are deliberately independent: nothing is "waiting for a restart" until you press Update or queue the market. |
-| **Updates** | Lists each plugin's current version and publish date against the new one, in a height-capped, scrollable list. Installs through the profile's own launcher (`dsh plugin add <name>@<exact version>`), then re-reads the on-disk manifest to verify. The dialog also carries a Plugin market button that closes it and opens the market sheet. |
+| **Updates** | Lists each plugin's current version and publish date against the new one, in a height-capped, scrollable list. Installs through the profile's own launcher (`dsh plugin add <name>@<exact version>`), then re-reads the on-disk manifest to verify. The dialog also carries a Plugin market button that closes it and opens the market sheet. When the batch is done the primary button becomes **Restart** and hands over to the restart dialog. |
 | **Restart or reload?** | Decided by the same rule the market uses (`hasHostHalf`): a package with only `dsh.client` is browser code and takes effect on reload; anything with a Host half needs the full restart. |
 | **The market itself** | `dshmarket` cannot replace its own running bundle, so a full restart hands that one update to the detached worker, which runs it *before* the process dies — and skips the step entirely when there is nothing newer. |
 | **Market entry point** | With no updates pending, the second button opens the market in a sheet of this plugin's own, using the market's published `market.render()` service. The update dialog has the same entry. If the market is not installed, the sheet offers to install it. |

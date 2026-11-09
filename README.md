@@ -2,6 +2,14 @@
 
 DSH 插件：侧栏底部动作行里的「重启」+「更新插件」两个按钮，以及各自的弹窗。
 
+**侧栏一键更新插件与重启 Harness。** 更新按钮带待更新数量，点开能看到每个插件的当前/新版本与发布时间；
+更新完成后按钮直接变成「重启」，一键交接给重启弹窗。没有更新时，它就是插件市场入口。
+
+| 更新插件 | 更新完成 → 重启 |
+|---|---|
+| ![更新弹窗（亮色）](https://raw.githubusercontent.com/dolacmeo/dsh-restart-and-update/HEAD/assets/screenshot-1-updates-light.png) | ![更新完成后的重启按钮](https://raw.githubusercontent.com/dolacmeo/dsh-restart-and-update/HEAD/assets/screenshot-3-after-update.png) |
+| ![更新弹窗（暗色）](https://raw.githubusercontent.com/dolacmeo/dsh-restart-and-update/HEAD/assets/screenshot-2-updates-dark.png) | ![重启弹窗（暗色）](https://raw.githubusercontent.com/dolacmeo/dsh-restart-and-update/HEAD/assets/screenshot-4-restart-dark.png) |
+
 ## 界面
 
 - **入口行**：侧栏 `footArea` 里的 `sidebar.footer.action`（官方说明：设置按钮旁的可选动作），
@@ -20,6 +28,8 @@ DSH 插件：侧栏底部动作行里的「重启」+「更新插件」两个按
 - **更新弹窗**：标题 + 说明 + 可滚动插件列表（每行：插件名、当前版本 + 发布时间 → 新版本 + 发布时间，
   行尾标 `需完全重启` / `刷新即可`），底部 `取消`（左）/ `更新 (n)`（右），再下面一行是通栏
   「插件市场」按钮；点击会关闭更新弹窗并直接打开市场浮层。
+  - **更新完成后**，右下的主按钮变成 `重启`（带刷新图标）；点击关闭更新弹窗并打开重启弹窗，
+    不会留下一个点不动的按钮。
   - 列表 `max-height: min(52vh, 420px)` + `overflow-y:auto`，卡片本身
     `max-height: calc(100vh - 48px)`，列表再长也只滚动列表，不会把按钮挤出屏幕。
 - **检测时机**：客户端模块挂载后 300ms 检测一次（即页面/应用启动后就有 badge），

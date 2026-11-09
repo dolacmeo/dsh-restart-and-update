@@ -599,6 +599,15 @@ body[data-ds-dark-theme] .dsw-rst-badge-warn{--dsw-rst-badge-bg:#f59e0b;--dsw-rs
           openMarket();
         };
 
+        /* After a batch has landed the useful next step is the restart, so the
+           update dialog hands over to the restart dialog instead of leaving a
+           dead button behind. */
+        const openRestartFromUpdates = () => {
+          if (store.updatesPhase === 'updating') return;
+          closeUpdates();
+          openDialog();
+        };
+
         /* Restart on the left, update on the right: the two share one row.
            With nothing to update the right button opens the market instead, and
            the restart button carries the count of updates that need a restart. */
@@ -747,6 +756,7 @@ body[data-ds-dark-theme] .dsw-rst-badge-warn{--dsw-rst-badge-bg:#f59e0b;--dsw-rs
           const open = state.updatesOpen;
           const busy = state.updatesPhase === 'updating';
           const checking = state.updatesPhase === 'checking';
+          const done = state.updatesPhase === 'done';
           const rows = state.updates;
 
           React.useEffect(() => {
@@ -840,12 +850,21 @@ body[data-ds-dark-theme] .dsw-rst-badge-warn{--dsw-rst-badge-bg:#f59e0b;--dsw-rs
                 disabled: busy,
                 onClick: closeUpdates,
               }, state.updatesPhase === 'done' ? t('close') : t('cancel')),
-              h('button', {
-                type: 'button',
-                className: 'dsw-rst-btn dsw-rst-btn-primary',
-                disabled: busy || checking || rows.length === 0,
-                onClick: applyUpdates,
-              }, busy ? t('updating') : `${t('updateAction')}${rows.length > 0 ? ` (${rows.length})` : ''}`),
+              done
+                ? h('button', {
+                  type: 'button',
+                  className: 'dsw-rst-btn dsw-rst-btn-primary dsw-rst-btn-with-icon',
+                  title: t('restart'),
+                  onClick: openRestartFromUpdates,
+                },
+                h('span', { className: 'dsw-rst-btn-icon', 'aria-hidden': 'true' }, h(RestartIcon)),
+                t('restart'))
+                : h('button', {
+                  type: 'button',
+                  className: 'dsw-rst-btn dsw-rst-btn-primary',
+                  disabled: busy || checking || rows.length === 0,
+                  onClick: applyUpdates,
+                }, busy ? t('updating') : `${t('updateAction')}${rows.length > 0 ? ` (${rows.length})` : ''}`),
             ),
             h('div', { className: 'dsw-rst-row' },
               h('button', {

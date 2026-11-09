@@ -1,8 +1,8 @@
 {
   "name": "dsh-restart-and-update",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "type": "module",
-  "description": "Restart DeepSeek Harness and update its plugins from the sidebar: a full relaunch that survives the Windows console trap, plugin updates with publish dates, and a one-click way back into the plugin market.",
+  "description": "Restart DeepSeek Harness and update its plugins from the sidebar: verified updates with publish dates, and a restart that survives the Windows console trap. · 侧栏一键更新插件与重启 Harness。",
   "icon": "./icon.svg",
   "license": "MIT",
   "main": "index.js",
