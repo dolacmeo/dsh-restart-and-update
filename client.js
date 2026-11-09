@@ -27,13 +27,13 @@ window.__ModuleLoader__.load({
         updatesIntro: '这些插件有新版本：',
         checking: '正在检查更新…',
         updatesEmpty: '所有插件都是最新版本。',
-        updatesChecked: '已检查 {checked} 个可更新插件。',
+        updatesChecked: '已检查 {checked} 个插件。',
         current: '当前',
         latest: '新版',
         updating: '正在更新…',
         deferredNote: '市场插件（dshmarket）不能自我替换，会在下次「完全重启」时先更新再重启。',
         updateFailed: '更新失败：',
-        update: '更新',
+        updateAction: '更新',
         close: '关闭',
         unknownTime: '未知时间',
         market: '插件市场',
@@ -46,7 +46,7 @@ window.__ModuleLoader__.load({
         marketNotLoadedTitle: '插件市场已安装但未加载',
         marketNotLoadedBody: 'dshmarket 在 profile 里，但当前没有提供市场界面。可能是刚安装、需要完全重启，或它被停用了。',
         marketOpenPluginsPage: '打开插件页',
-        restartBadge: '{count} 个插件已更新，等重启生效',
+        restartBadge: '{count} 项更新等待重启',
         needsRestart: '需完全重启',
         reloadOnly: '刷新即可',
         afterUpdate: '更新完成：{restart} 个插件需完全重启，{reload} 个刷新页面即可。',
@@ -72,13 +72,13 @@ window.__ModuleLoader__.load({
         updatesIntro: 'These plugins have newer versions:',
         checking: 'Checking for updates…',
         updatesEmpty: 'Every plugin is up to date.',
-        updatesChecked: 'Checked {checked} updatable plugins.',
+        updatesChecked: 'Checked {checked} plugins.',
         current: 'now',
         latest: 'new',
         updating: 'Updating…',
         deferredNote: 'The market (dshmarket) cannot replace itself; it is updated first on the next full restart.',
         updateFailed: 'Update failed: ',
-        update: 'Update',
+        updateAction: 'Update',
         close: 'Close',
         unknownTime: 'unknown date',
         market: 'Plugin market',
@@ -91,7 +91,7 @@ window.__ModuleLoader__.load({
         marketNotLoadedTitle: 'The plugin market is installed but not loaded',
         marketNotLoadedBody: 'dshmarket is in this profile, but it provides no market UI right now — it may have just been installed and need a full restart, or it is disabled.',
         marketOpenPluginsPage: 'Open the Plugins page',
-        restartBadge: '{count} updated plugin(s) waiting for a restart',
+        restartBadge: '{count} update(s) waiting for a restart',
         needsRestart: 'needs restart',
         reloadOnly: 'reload is enough',
         afterUpdate: 'Updated: {restart} need a full restart, {reload} only need a reload.',
@@ -125,7 +125,6 @@ window.__ModuleLoader__.load({
          what the restart button warns about. It is NOT "updates that would need
          a restart if applied" — that is only a property of the pending list. */
       restartPending: 0,
-      pendingNames: [],
       checkedOnce: false,
       marketOpen: false,
       /* 'panel' shows the market itself; 'absent' offers to install it; the rest
@@ -164,19 +163,21 @@ window.__ModuleLoader__.load({
 
     const CSS = `
 .dsw-rst-actions{display:flex;align-items:center;gap:8px;box-sizing:border-box;width:100%;min-width:0;flex:1 1 auto}
-.dsw-rst-trigger{display:flex;align-items:center;box-sizing:border-box;flex:1 1 0;min-width:0;height:44px;padding:6px;gap:8px;
+.dsw-rst-trigger{position:relative;display:flex;align-items:center;box-sizing:border-box;flex:1 1 0;min-width:0;height:44px;padding:6px;gap:8px;
   margin:0;border:0;border-radius:8px;background:transparent;color:var(--dsw-alias-label-primary,#16181c);
-  font:inherit;font-size:14px;line-height:1;text-align:left;cursor:pointer;user-select:none}
+  font:inherit;font-size:14px;line-height:1;text-align:left;cursor:pointer;user-select:none;-webkit-appearance:none;appearance:none}
 .dsw-rst-trigger:hover,.dsw-rst-trigger[aria-expanded="true"]{
   background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14))}
-.dsw-rst-trigger:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#247bbf);outline-offset:-2px}
+.dsw-rst-trigger:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#247bbf);outline-offset:-2px}
 .dsw-rst-icon{display:flex;align-items:center;justify-content:center;width:24px;height:24px;flex:0 0 auto;
   color:var(--dsw-alias-label-secondary,#5f6368)}
 .dsw-rst-icon svg{width:18px;height:18px;display:block}
 .dsw-rst-label{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dsw-rst-badge{flex:0 0 auto;box-sizing:border-box;min-width:18px;height:18px;padding:0 5px;border-radius:9px;
-  background:var(--dsw-alias-brand-primary,#247bbf);color:#fff;font-size:11px;font-weight:600;line-height:18px;
+.dsw-rst-badge{--dsw-rst-badge-bg:#15803d;--dsw-rst-badge-fg:#fff;
+  flex:0 0 auto;box-sizing:border-box;min-width:18px;height:18px;padding:0 5px;border-radius:9px;
+  background:var(--dsw-rst-badge-bg);color:var(--dsw-rst-badge-fg);font-size:11px;font-weight:600;line-height:18px;
   text-align:center;font-variant-numeric:tabular-nums}
+body[data-ds-dark-theme] .dsw-rst-badge{--dsw-rst-badge-bg:#3fb950;--dsw-rst-badge-fg:#04140a}
 .dsw-rst-actions[data-collapsed="true"]{gap:4px;justify-content:center}
 .dsw-rst-actions[data-collapsed="true"] .dsw-rst-trigger{flex:0 0 auto;width:36px;height:36px;padding:0;gap:0;
   justify-content:center}
@@ -200,16 +201,23 @@ window.__ModuleLoader__.load({
 .dsw-rst-rows{display:flex;flex-direction:column;gap:8px;flex:0 0 auto}
 .dsw-rst-row{display:flex;gap:8px}
 .dsw-rst-btn{box-sizing:border-box;flex:1 1 0;min-width:0;min-height:34px;padding:0 12px;border-radius:8px;
-  border:1px solid var(--dsw-alias-border-l2,rgba(0,0,0,.16));background:var(--dsw-alias-bg-layer-1,#fff);
-  color:var(--dsw-alias-label-primary,#16181c);font:inherit;font-size:13px;line-height:1;cursor:pointer}
-.dsw-rst-btn:hover:not(:disabled){background:var(--dsw-alias-bg-layer-2,rgba(0,0,0,.05))}
-.dsw-rst-btn:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#247bbf);outline-offset:1px}
+  border:1px solid var(--dsw-alias-border-l2,rgba(0,0,0,.16));background:var(--dsw-alias-bg-layer-3,#fff);
+  color:var(--dsw-alias-label-primary,#16181c);font:inherit;font-size:13px;line-height:1;cursor:pointer;
+  -webkit-appearance:none;appearance:none}
+.dsw-rst-btn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14))}
+.dsw-rst-btn:focus-visible{outline:2px solid var(--dsw-alias-state-business-primary,#247bbf);outline-offset:1px}
 .dsw-rst-btn:disabled{opacity:.55;cursor:default}
-.dsw-rst-btn-primary{border-color:transparent;background:var(--dsw-alias-brand-primary,#247bbf);color:#fff}
-.dsw-rst-btn-primary:hover:not(:disabled){background:var(--dsw-alias-brand-primary,#247bbf);filter:brightness(1.08)}
+.dsw-rst-btn-primary{border-color:transparent;
+  background:var(--dsw-alias-button-primary-fill,var(--dsw-alias-brand-primary,#247bbf));
+  color:var(--dsw-alias-label-primary-foreground,#fff)}
+.dsw-rst-btn-primary:hover:not(:disabled){
+  background:var(--dsw-alias-button-primary-hover,var(--dsw-alias-brand-primary,#247bbf))}
 .dsw-rst-btn-ghost{flex:1 1 100%;border-color:transparent;background:transparent;
-  color:var(--dsw-alias-label-secondary,#5f6368)}
-.dsw-rst-btn-ghost:hover:not(:disabled){background:var(--dsw-alias-bg-layer-2,rgba(0,0,0,.05));color:var(--dsw-alias-label-primary,#16181c)}
+  color:var(--dsw-alias-label-primary,#16181c)}
+.dsw-rst-btn-ghost:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14));color:var(--dsw-alias-label-primary,#16181c)}
+.dsw-rst-btn-with-icon{display:flex;align-items:center;justify-content:center;gap:6px}
+.dsw-rst-btn-icon{display:inline-flex;flex:0 0 auto;width:16px;height:16px}
+.dsw-rst-btn-icon svg{display:block;width:16px;height:16px}
 .dsw-rst-status{margin:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-secondary,#5f6368);flex:0 0 auto}
 .dsw-rst-error{margin:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-state-error-primary,#d93025);
   white-space:pre-wrap;word-break:break-word;flex:0 0 auto}
@@ -217,15 +225,17 @@ window.__ModuleLoader__.load({
   overscroll-behavior:contain;flex:1 1 auto;min-height:0;max-height:min(52vh,420px);
   border:1px solid var(--dsw-alias-border-l1,rgba(0,0,0,.1));border-radius:10px;padding:4px}
 .dsw-rst-item{display:flex;flex-direction:column;gap:3px;padding:8px 10px;border-radius:7px}
-.dsw-rst-item:hover{background:var(--dsw-alias-bg-layer-2,rgba(0,0,0,.04))}
+.dsw-rst-item:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14))}
 .dsw-rst-item-name{font-size:13px;font-weight:500;color:var(--dsw-alias-label-primary,#16181c);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dsw-rst-item-vers{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px;font-size:12px;
   color:var(--dsw-alias-label-secondary,#5f6368);font-variant-numeric:tabular-nums}
 .dsw-rst-item-vers code{font:inherit;color:var(--dsw-alias-label-primary,#16181c)}
 .dsw-rst-arrow{color:var(--dsw-alias-state-idle-primary,#9aa0a6)}
-.dsw-rst-time{opacity:.75}
-.dsw-rst-badge-warn{background:var(--dsw-alias-state-warn-primary,#c47f00)}
+body[data-ds-dark-theme] .dsw-rst-arrow{color:var(--dsw-alias-label-secondary,#cfd3d6)}
+.dsw-rst-time{opacity:1}
+.dsw-rst-badge-warn{--dsw-rst-badge-bg:#b45309;--dsw-rst-badge-fg:#fff}
+body[data-ds-dark-theme] .dsw-rst-badge-warn{--dsw-rst-badge-bg:#f59e0b;--dsw-rst-badge-fg:#1a1200}
 .dsw-rst-item-flag{flex:0 0 auto;font-size:11px;padding:0 6px;border-radius:9px;line-height:16px;
   background:var(--dsw-alias-bg-layer-2,rgba(0,0,0,.06));color:var(--dsw-alias-label-secondary,#5f6368)}
 .dsw-rst-sheet{box-sizing:border-box;display:flex;flex-direction:column;width:min(1120px,94vw);height:min(88vh,960px);
@@ -352,7 +362,12 @@ window.__ModuleLoader__.load({
         };
         const closeUpdates = () => {
           if (store.updatesPhase === 'updating') return;
-          patch({ updatesOpen: false, updatesPhase: 'idle', updatesError: null, updatesUpdated: 0, updates: [], updatesChecked: 0, updatesDeferred: [] });
+          /* Closing must not erase what the second button knows: while updates
+             are still available, the footer keeps showing "update", not the
+             market. The next check refreshes this list in place. A check that
+             is already in flight stays in flight so reopening cannot start a
+             duplicate request. */
+          patch({ updatesOpen: false, updatesPhase: store.updatesPhase === 'checking' ? 'checking' : 'idle' });
         };
 
         /**
@@ -372,6 +387,9 @@ window.__ModuleLoader__.load({
         // `provide` / `effect`) — no `inject` and no `reflect`. Resolve the
         // market lazily through `ctx.get` at click time, as documented.
         let marketElement = null;
+        /* Bumped whenever an update starts, so a check that was already in flight
+           can never overwrite the update's state or its result. */
+        let updatesCheckToken = 0;
 
         const marketApi = () => {
           let value = null;
@@ -433,6 +451,9 @@ window.__ModuleLoader__.load({
             patch({
               marketMode: 'installed',
               marketVersion: typeof body.version === 'string' ? body.version : null,
+              // The installed market is on disk but not loaded: it is one more
+              // update the restart button should warn about.
+              restartPending: typeof body.pendingCount === 'number' ? body.pendingCount : store.restartPending + 1,
             });
           }).catch((error) => {
             patch({ marketMode: 'absent', marketError: String((error && error.message) || error) });
@@ -440,7 +461,12 @@ window.__ModuleLoader__.load({
         };
 
         const openPluginsPage = () => {
-          const layout = ctx.get('layout');
+          let layout = null;
+          try {
+            layout = ctx.get('layout');
+          } catch {
+            layout = null;
+          }
           if (!layout || typeof layout.selectPanel !== 'function') return;
           try {
             layout.selectPanel('plugins');
@@ -485,6 +511,7 @@ window.__ModuleLoader__.load({
         /** Ask the Host which plugins the registry has newer versions for. */
         const checkUpdates = () => {
           if (store.updatesPhase === 'checking' || store.updatesPhase === 'updating') return;
+          const token = ++updatesCheckToken;
           patch({ updatesPhase: 'checking', updatesError: null });
           fetch(`${ROUTE}/updates`, { headers: { accept: 'application/json' } })
             .then(async (response) => {
@@ -492,37 +519,48 @@ window.__ModuleLoader__.load({
               if (!response.ok || !body || body.ok !== true) {
                 throw new Error((body && body.message) || `HTTP ${response.status}`);
               }
+              /* An update started while this request was in flight: its result
+                 is the newer truth, so this check is dropped entirely. */
+              if (token !== updatesCheckToken) return;
               const pending = Array.isArray(body.pending) ? body.pending : [];
               patch({
                 updatesPhase: 'idle',
                 updates: Array.isArray(body.packages) ? body.packages : [],
                 updatesChecked: typeof body.checked === 'number' ? body.checked : 0,
                 restartPending: pending.length,
-                pendingNames: pending.map((row) => row.name),
                 checkedOnce: true,
                 updatesError: null,
               });
             })
             .catch((error) => {
+              if (token !== updatesCheckToken) return;
               patch({ updatesPhase: 'idle', updatesError: String((error && error.message) || error), checkedOnce: true });
             });
         };
 
         const openUpdates = () => {
-          patch({ updatesOpen: true, updatesError: null, updatesUpdated: 0 });
+          if (store.updatesPhase === 'updating') return;
+          patch({ updatesOpen: true, updatesError: null, updatesUpdated: 0, updatesDeferred: [] });
           checkUpdates();
         };
 
-        /* No pending updates: the second button is the market's own entry point
-           instead of a dialog that would only say "nothing to do". A failed or
-           unfinished check still opens the dialog, so the answer stays visible. */
+        /* The second button is "update" while any update is known, still being
+           checked, or failed to check; only a completed check with nothing left
+           turns it into the market entry point. Keeping "update" during a
+           background check prevents the button flipping on every re-check. */
+        const updatesAvailable = () => store.updates.length > 0
+          || store.updatesError !== null
+          || store.updatesPhase === 'checking'
+          || !store.checkedOnce;
         const openSecondButton = () => {
-          if (store.updates.length > 0 || store.updatesError !== null || !store.checkedOnce) openUpdates();
+          if (updatesAvailable()) openUpdates();
           else openMarket();
         };
 
         const applyUpdates = () => {
-          if (store.updatesPhase === 'updating' || store.updates.length === 0) return;
+          if (store.updatesPhase !== 'idle' || store.updates.length === 0) return;
+          /* A check still in flight belongs to the state before this batch. */
+          updatesCheckToken += 1;
           patch({ updatesPhase: 'updating', updatesError: null });
           fetch(`${ROUTE}/update`, {
             method: 'POST',
@@ -535,20 +573,30 @@ window.__ModuleLoader__.load({
               throw new Error(detail);
             }
             const done = Array.isArray(body.results) ? body.results.filter((row) => row.ok).length : store.updates.length;
-            const restartNeeded = store.updates.filter((row) => row.needsRestart !== false).length;
             const deferred = Array.isArray(body.deferred) ? body.deferred : [];
+            // The Host's pending file is authoritative: it also includes the
+            // market the restart worker has been handed as a deferred update.
+            const pendingCount = typeof body.pendingCount === 'number'
+              ? body.pendingCount
+              : store.updates.filter((row) => row.needsRestart !== false).length + deferred.length;
             patch({
               updatesPhase: 'done',
               updatesUpdated: done,
               updatesDeferred: deferred,
-              // After this batch the pending count is exactly what the Host just
-              // recorded: host-half plugins, plus the market the worker will take.
-              restartPending: restartNeeded + deferred.length,
+              restartPending: pendingCount,
               updates: [],
             });
           }).catch((error) => {
             patch({ updatesPhase: 'idle', updatesError: String((error && error.message) || error) });
           });
+        };
+
+        /* From the update dialog into the market: one overlay at a time, and the
+           known update list survives so the footer does not change its meaning. */
+        const openMarketFromUpdates = () => {
+          if (store.updatesPhase === 'updating') return;
+          closeUpdates();
+          openMarket();
         };
 
         /* Restart on the left, update on the right: the two share one row.
@@ -559,10 +607,10 @@ window.__ModuleLoader__.load({
           const wide = !(props && props.wide === false);
           const count = state.updates.length;
           const updatesBusy = state.updatesPhase === 'updating';
-          const pending = count > 0;
-          /* The restart badge counts updates already applied and waiting to load.
-             It is not derived from the pending update list above: until someone
-             presses update, nothing is waiting for a restart. */
+          const pending = updatesAvailable();
+          /* The restart badge counts updates applied (or queued) and waiting to
+             load. It is not derived from the pending update list above: until
+             someone presses update, nothing is waiting for a restart. */
           const restartCount = state.restartPending;
           const restartTitle = restartCount > 0
             ? `${t('restart')} — ${t('restartBadge', { count: restartCount })}`
@@ -698,6 +746,7 @@ window.__ModuleLoader__.load({
           const closeRef = React.useRef(null);
           const open = state.updatesOpen;
           const busy = state.updatesPhase === 'updating';
+          const checking = state.updatesPhase === 'checking';
           const rows = state.updates;
 
           React.useEffect(() => {
@@ -794,9 +843,20 @@ window.__ModuleLoader__.load({
               h('button', {
                 type: 'button',
                 className: 'dsw-rst-btn dsw-rst-btn-primary',
-                disabled: busy || rows.length === 0,
+                disabled: busy || checking || rows.length === 0,
                 onClick: applyUpdates,
-              }, busy ? t('updating') : `${t('update')}${rows.length > 0 ? ` (${rows.length})` : ''}`),
+              }, busy ? t('updating') : `${t('updateAction')}${rows.length > 0 ? ` (${rows.length})` : ''}`),
+            ),
+            h('div', { className: 'dsw-rst-row' },
+              h('button', {
+                type: 'button',
+                className: 'dsw-rst-btn dsw-rst-btn-ghost dsw-rst-btn-with-icon',
+                title: t('market'),
+                disabled: busy,
+                onClick: openMarketFromUpdates,
+              },
+              h('span', { className: 'dsw-rst-btn-icon', 'aria-hidden': 'true' }, h(MarketIcon)),
+              t('market')),
             ),
           )));
         }
@@ -881,6 +941,17 @@ window.__ModuleLoader__.load({
                   h('button', { type: 'button', className: 'dsw-rst-btn', onClick: closeMarket }, t('close')),
                   h('button', { type: 'button', className: 'dsw-rst-btn dsw-rst-btn-primary', onClick: installMarket }, t('marketInstall')),
                 )));
+            }
+            /* The restart buttons in this sheet use the shared restart state;
+               without this the request would fail silently behind the sheet. */
+            if (state.phase === 'full') {
+              inner.push(h('p', { key: 'restart-busy', className: 'dsw-rst-status', role: 'status' }, t('busyFull')));
+            } else if (state.phase === 'restarting') {
+              inner.push(h('p', { key: 'restarting', className: 'dsw-rst-status', role: 'status' }, t('restarting')));
+            }
+            if (state.error !== null) {
+              inner.push(h('p', { key: 'restart-err', className: 'dsw-rst-error', role: 'alert' },
+                t('failed') + state.error));
             }
             if (state.marketError !== null) {
               inner.push(h('p', { key: 'err', className: 'dsw-rst-error', role: 'alert' },

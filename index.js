@@ -16,6 +16,7 @@
  * cannot replace itself while it is the running bundle.
  */
 import { execFile } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -37,7 +38,7 @@ const WORKER_SCRIPT = String.raw`param(
   [Parameter(Mandatory=$true)][int]$StartPid,
   [Parameter(Mandatory=$true)][string]$ExePath,
   [Parameter(Mandatory=$true)][string]$LogPath,
-  [string]$UpdateCommand = '',
+  [string]$UpdateCommandBase64 = '',
   [int]$UpdateTimeoutSeconds = 180
 )
 
@@ -65,6 +66,12 @@ function Write-Log {
 }
 
 Write-Log ('worker-start pid=' + $PID + ' start=' + $StartPid + ' exe=' + $ExePath)
+
+# The update command travels base64-encoded so its own quotes reach cmd.exe intact.
+$UpdateCommand = ''
+if ($UpdateCommandBase64 -ne '') {
+  try { $UpdateCommand = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($UpdateCommandBase64)) } catch { }
+}
 
 # Optional pre-restart plugin update: the market bundle cannot replace itself while
 # it is running, so the detached worker does it before the app goes away.
@@ -215,14 +222,29 @@ function sameOrigin(req) {
 function readBody(req, limit = 4096) {
   return new Promise((done) => {
     let size = 0
+    let overflow = false
+    let settled = false
     const chunks = []
+    const finish = () => {
+      if (settled) return
+      settled = true
+      done({ text: Buffer.concat(chunks).toString('utf8'), overflow })
+    }
     req.on('data', (chunk) => {
       size += chunk.length
-      if (size <= limit) chunks.push(chunk)
-      else req.destroy()
+      if (size <= limit) {
+        chunks.push(chunk)
+        return
+      }
+      /* Destroying the stream can suppress 'end', so resolve here rather than
+         hanging the route forever. The handler turns this into a 413. */
+      overflow = true
+      req.destroy()
+      finish()
     })
-    req.on('end', () => done(Buffer.concat(chunks).toString('utf8')))
-    req.on('error', () => done(''))
+    req.on('end', finish)
+    req.on('error', finish)
+    req.on('aborted', finish)
   })
 }
 
@@ -287,15 +309,34 @@ async function installedPlugins() {
   const dir = await profileDirectory()
   if (dir === undefined) return { dir: undefined, profile: null, plugins: [] }
   const manifest = JSON.parse(await readFile(join(dir, 'package.json'), 'utf8'))
-  const dependencies = manifest.dependencies ?? {}
+  const dependencies = manifest.dependencies !== null && typeof manifest.dependencies === 'object'
+    ? manifest.dependencies
+    : {}
   const plugins = []
   for (const [name, spec] of Object.entries(dependencies)) {
-    const raw = String(spec)
-    const version = /^[^a-z]*\d/.test(raw) ? raw.replace(/^[~^<>=]*/, '') : null
+    const raw = String(spec).trim()
+    const source = /^link:/i.test(raw)
+      ? 'link'
+      : /^file:/i.test(raw)
+        ? 'file'
+        : /^(?:workspace|portal|catalog|npm|git(?:\+|:)|https?:|github:)/i.test(raw)
+          ? 'other'
+          : /^(?:[~^<>=]*v?\d|latest$|\*$)/i.test(raw)
+            ? 'npm'
+            : 'other'
+    /* A range is not an installed version. The dependency spec is only a
+       fallback for an npm package whose node_modules manifest is unreadable;
+       everything else is read from disk, exactly as the package manager left it. */
+    let specVersion = null
+    if (source === 'npm') {
+      const match = /^[~^<>=]*\s*v?(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)/.exec(raw)
+      specVersion = match?.[1] ?? null
+    }
+    const diskVersion = source === 'npm' ? await installedVersionOnDisk(dir, name) : undefined
     plugins.push({
       name,
-      installedVersion: version,
-      source: version === null ? (raw.startsWith('link:') ? 'link' : raw.startsWith('file:') ? 'file' : 'other') : 'npm',
+      installedVersion: source === 'npm' ? (diskVersion ?? specVersion) : null,
+      source,
     })
   }
   return { dir, profile: manifest.name ?? null, plugins }
@@ -312,11 +353,18 @@ const packumentCache = new Map()
  * Host (not in the page) so a reload — the very thing that would lose it — does
  * not clear it; a fresh process starts with an empty file.
  */
-const PENDING_FILE = join(WORK_DIR, 'pending-updates.json')
+/* Per-profile pending file. Two Hosts (another desktop profile, or a second
+   checkout) share the OS temp directory, and one profile's queued update must
+   never appear as the other's restart badge. */
+function pendingPath(dir) {
+  if (dir === undefined) return join(WORK_DIR, 'pending-updates.json')
+  const key = createHash('sha1').update(resolve(dir).toLowerCase()).digest('hex').slice(0, 12)
+  return join(WORK_DIR, `pending-updates-${key}.json`)
+}
 
-async function readPending() {
+async function readPending(dir) {
   try {
-    const raw = JSON.parse(await readFile(PENDING_FILE, 'utf8'))
+    const raw = JSON.parse(await readFile(pendingPath(dir), 'utf8'))
     const rows = Array.isArray(raw?.packages) ? raw.packages : []
     return rows.filter((row) => typeof row?.name === 'string')
   } catch {
@@ -324,10 +372,10 @@ async function readPending() {
   }
 }
 
-async function writePending(rows) {
+async function writePending(rows, dir) {
   try {
     await mkdir(WORK_DIR, { recursive: true })
-    await writeFile(PENDING_FILE, JSON.stringify({ packages: rows }, null, 2), 'utf8')
+    await writeFile(pendingPath(dir), JSON.stringify({ packages: rows }, null, 2), 'utf8')
   } catch {
     // A pending list that cannot be written must not fail the update itself.
   }
@@ -342,7 +390,11 @@ async function packument(name) {
   const cached = packumentCache.get(name)
   if (cached !== undefined && Date.now() - cached.at < PACKUMENT_CACHE_MS) return cached.value
   const url = `https://registry.npmjs.org/${name.split('/').map(encodeURIComponent).join('/')}`
-  const response = await fetch(url, { headers: { accept: 'application/json' } })
+  // A registry that stops answering must not freeze the update button forever.
+  const response = await fetch(url, {
+    headers: { accept: 'application/json' },
+    signal: AbortSignal.timeout(15000),
+  })
   if (!response.ok) throw new Error(`registry answered ${response.status}`)
   const body = await response.json()
   const value = {
@@ -351,6 +403,12 @@ async function packument(name) {
   }
   packumentCache.set(name, { at: Date.now(), value })
   return value
+}
+
+/** A registry target we are willing to pass to a shell / package manager. */
+function isRegistryVersion(value) {
+  return typeof value === 'string'
+    && /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(value)
 }
 
 /** Compare two plain semver strings; undefined when either is unparseable. */
@@ -365,10 +423,31 @@ function compareVersions(a, b) {
   for (const key of ['major', 'minor', 'patch']) {
     if (left[key] !== right[key]) return left[key] < right[key] ? -1 : 1
   }
-  if (left.pre === null && right.pre === null) return 0
-  if (left.pre === null) return 1
-  if (right.pre === null) return -1
-  return left.pre < right.pre ? -1 : left.pre > right.pre ? 1 : 0
+  return comparePrerelease(left.pre, right.pre)
+}
+
+/** Semver prerelease precedence: numeric identifiers compare numerically. */
+function comparePrerelease(left, right) {
+  if (left === null && right === null) return 0
+  if (left === null) return 1
+  if (right === null) return -1
+  const leftParts = left.split('.')
+  const rightParts = right.split('.')
+  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
+    if (leftParts[index] === undefined) return -1
+    if (rightParts[index] === undefined) return 1
+    const leftNumeric = /^\d+$/.test(leftParts[index])
+    const rightNumeric = /^\d+$/.test(rightParts[index])
+    if (leftNumeric && rightNumeric) {
+      const order = Number(leftParts[index]) - Number(rightParts[index])
+      if (order !== 0) return order < 0 ? -1 : 1
+    } else if (leftNumeric !== rightNumeric) {
+      return leftNumeric ? -1 : 1
+    } else if (leftParts[index] !== rightParts[index]) {
+      return leftParts[index] < rightParts[index] ? -1 : 1
+    }
+  }
+  return 0
 }
 
 /**
@@ -427,17 +506,21 @@ async function checkUpdates() {
   // The pending list is only meaningful for packages still installed at the
   // version the update put on disk; a plugin that has since moved on drops out.
   const installed = new Map(plugins.map((plugin) => [plugin.name, plugin.installedVersion]))
-  const pending = (await readPending()).filter((row) => installed.get(row.name) === row.installedVersion)
+  const pending = (await readPending(dir)).filter((row) => installed.get(row.name) === row.installedVersion)
+  const pendingNames = new Set(pending.map((row) => row.name))
+  /* A package already queued for the next restart (including the market the
+     restart worker will update) is not offered again by the update button. */
+  const available = rows.filter((row) => !pendingNames.has(row.name))
   return {
     profile,
     profileName: profileName(dir),
     checked,
     // `updatable` drives the update button's badge.
-    updatable: rows.length,
-    // `pending` drives the restart button's badge: applied, not yet loaded.
+    updatable: available.length,
+    // `pending` drives the restart button's badge: applied or queued, not loaded.
     pendingCount: pending.length,
     pending,
-    packages: rows,
+    packages: available,
   }
 }
 
@@ -446,7 +529,7 @@ async function resolveTargets(requested) {
   const { plugins } = await installedPlugins()
   const byName = new Map(plugins.map((plugin) => [plugin.name, plugin]))
   const targets = []
-  for (const name of requested) {
+  for (const name of new Set(requested)) {
     const plugin = byName.get(name)
     if (plugin === undefined) throw Object.assign(new Error(`${name} is not installed`), { code: 'not-installed' })
     if (plugin.source !== 'npm') throw Object.assign(new Error(`${name} is a ${plugin.source} package and cannot be updated`), { code: 'not-registry' })
@@ -498,19 +581,26 @@ async function updatePlugins(names) {
   if (!(await commandExists(cli))) {
     throw Object.assign(new Error('the dsh launcher is not found beside this app'), { code: 'cli-missing' })
   }
-  const { dir } = await installedPlugins()
+  const { dir, plugins } = await installedPlugins()
   const profile = profileName(dir)
-  if (profile === null) {
-    throw Object.assign(new Error('this Host was started without a profile'), { code: 'no-profile' })
+  if (profile === null || /[\r\n"%]/.test(profile)) {
+    throw Object.assign(new Error('this Host was started without a usable profile'), { code: 'no-profile' })
   }
+  const installedVersions = new Map(plugins.map((plugin) => [plugin.name, plugin.installedVersion]))
   const results = []
   const deferred = []
-  for (const name of names) {
+  for (const name of new Set(names)) {
     // The market owns the running bundle and refuses to replace itself; its update
     // belongs to the restart worker, which runs after this process is gone. Report
-    // it as deferred rather than failing the batch.
+    // it as deferred rather than failing the batch, and only when it is actually
+    // behind the registry.
     if (name === SELF_HOST_PACKAGE) {
-      deferred.push(name)
+      const current = await installedVersionOnDisk(dir, name)
+      const meta = await packument(name).catch(() => null)
+      const target = meta?.latest ?? null
+      const newer = target !== null && (current === undefined || compareVersions(target, current) === 1)
+      if (newer) deferred.push(name)
+      else results.push({ name, ok: true, installed: current ?? null, unchanged: true, output: '' })
       continue
     }
     // Pin the exact target. `@latest` leaves pnpm free to answer "already up to
@@ -518,8 +608,13 @@ async function updatePlugins(names) {
     // an explicit version either lands on disk or fails out loud.
     const meta = await packument(name).catch(() => null)
     const target = meta?.latest ?? null
-    if (target === null) {
-      results.push({ name, ok: false, exitCode: 1, output: `no registry version for ${name}` })
+    if (target === null || !isRegistryVersion(target)) {
+      results.push({
+        name,
+        ok: false,
+        exitCode: 1,
+        output: target === null ? `no registry version for ${name}` : `registry returned an invalid version for ${name}: ${target}`,
+      })
       break
     }
     const outcome = await runLauncher(cli, ['plugin', '--profile', profile, 'add', `${name}@${target}`], 240000)
@@ -537,10 +632,11 @@ async function updatePlugins(names) {
     if (!results[results.length - 1].ok) break
   }
   // Record what is now on disk but not yet loaded: only host-half plugins owe a
-  // restart, a client-only one is already served by the next page load.
-  const applied = results.filter((row) => row.ok)
-  if (applied.length > 0) {
-    const pending = await readPending()
+  // restart, a client-only one is already served by the next page load. The
+  // market is queued for the restart worker instead of being replaced now.
+  const applied = results.filter((row) => row.ok && row.unchanged !== true)
+  if (applied.length > 0 || deferred.length > 0) {
+    const pending = await readPending(dir)
     const known = new Map(pending.map((row) => [row.name, row]))
     for (const row of applied) {
       const needsRestart = await hasHostHalf(dir, row.name)
@@ -551,9 +647,19 @@ async function updatePlugins(names) {
         updatedAt: new Date().toISOString(),
       })
     }
-    await writePending([...known.values()])
+    for (const name of deferred) {
+      const current = await installedVersionOnDisk(dir, name) ?? installedVersions.get(name)
+      known.set(name, {
+        name,
+        installedVersion: current ?? null,
+        updatedAt: new Date().toISOString(),
+        deferred: true,
+      })
+    }
+    await writePending([...known.values()], dir)
   }
-  return { results, deferred }
+  const pending = await readPending(dir)
+  return { results, deferred, pendingCount: pending.length }
 }
 
 /** The version actually present in the profile's node_modules, or undefined. */
@@ -581,13 +687,13 @@ async function installMarket() {
   }
   const { dir } = await installedPlugins()
   const profile = profileName(dir)
-  if (profile === null) {
-    throw Object.assign(new Error('this Host was started without a profile'), { code: 'no-profile' })
+  if (profile === null || /[\r\n"%]/.test(profile)) {
+    throw Object.assign(new Error('this Host was started without a usable profile'), { code: 'no-profile' })
   }
   const meta = await packument(SELF_HOST_PACKAGE).catch(() => null)
   const target = meta?.latest ?? null
-  if (target === null) {
-    throw Object.assign(new Error(`no registry version for ${SELF_HOST_PACKAGE}`), { code: 'no-version' })
+  if (target === null || !isRegistryVersion(target)) {
+    throw Object.assign(new Error(`no valid registry version for ${SELF_HOST_PACKAGE}`), { code: 'no-version' })
   }
   const outcome = await runLauncher(cli, ['plugin', '--profile', profile, 'add', `${SELF_HOST_PACKAGE}@${target}`], 240000)
   const installed = await installedVersionOnDisk(dir, SELF_HOST_PACKAGE)
@@ -597,26 +703,42 @@ async function installMarket() {
       { code: 'install-failed' },
     )
   }
-  return { name: SELF_HOST_PACKAGE, version: installed }
+  // The market is on disk but not loaded. Record it without discarding any other
+  // pending update this profile already had.
+  const pending = await readPending(dir)
+  const known = new Map(pending.map((row) => [row.name, row]))
+  known.set(SELF_HOST_PACKAGE, {
+    name: SELF_HOST_PACKAGE,
+    installedVersion: installed,
+    updatedAt: new Date().toISOString(),
+  })
+  await writePending([...known.values()], dir)
+  return { name: SELF_HOST_PACKAGE, version: installed, pendingCount: known.size }
 }
 
 /** The command the detached worker runs before the restart, or '' when nothing updates. */
 async function selfUpdateCommand() {
   const { dir, plugins } = await installedPlugins()
+  const idle = { needed: false, command: '', dir }
   const market = plugins.find((plugin) => plugin.name === SELF_HOST_PACKAGE)
-  if (market === undefined || market.source !== 'npm' || market.installedVersion === null) return { needed: false, command: '' }
+  if (market === undefined || market.source !== 'npm' || market.installedVersion === null) return idle
   const meta = await packument(SELF_HOST_PACKAGE).catch(() => null)
-  if (meta === null || meta.latest === null) return { needed: false, command: '' }
+  if (meta === null || !isRegistryVersion(meta.latest)) return idle
   const order = compareVersions(meta.latest, market.installedVersion)
-  if (order === undefined || order <= 0) return { needed: false, command: '' }
+  if (order === undefined || order <= 0) return idle
   const profile = profileName(dir)
-  if (profile === null) return { needed: false, command: '' }
+  if (profile === null || /[\r\n"%]/.test(profile)) return idle
   const cli = desktopCliPath()
+  if (!(await commandExists(cli))) return idle
+  // Every variable part is quoted; `call` keeps cmd.exe from eating the first
+  // quote of a quoted launcher path.
+  const command = `call "${cli}" plugin --profile "${profile}" add "${SELF_HOST_PACKAGE}@${meta.latest}"`
   return {
     needed: true,
+    dir,
     from: market.installedVersion,
     to: meta.latest,
-    command: `"${cli}" plugin --profile ${profile} add ${SELF_HOST_PACKAGE}@${meta.latest}`,
+    command,
   }
 }
 
@@ -632,11 +754,13 @@ async function startRelaunch(updateCommand = '') {
   await writeFile(launcherPath, LAUNCHER_SCRIPT, 'utf8')
 
   const quote = (value) => `"${value.replace(/"/g, '\\"')}"`
+  // Base64 keeps the command's own quotes intact through the PowerShell argv.
+  const encoded = Buffer.from(updateCommand, 'utf8').toString('base64')
   const args = [
     '-StartPid', String(process.pid),
     '-ExePath', quote(process.execPath),
     '-LogPath', quote(logPath),
-    '-UpdateCommand', quote(updateCommand),
+    '-UpdateCommandBase64', quote(encoded),
   ].join(' ')
 
   const { stdout } = await runPowerShell([
@@ -663,6 +787,19 @@ export function apply(ctx) {
     pid: process.pid,
     selfHostPackage: SELF_HOST_PACKAGE,
   })
+
+  /* One package operation at a time. Two simultaneous pnpm runs can corrupt a
+     profile; a restart and an install have the same conflict. */
+  let operation = null
+  const rejectBusy = (res) => {
+    if (operation === null) return false
+    sendJson(res, 409, {
+      ok: false,
+      code: 'busy',
+      message: `another plugin operation is already running (${operation})`,
+    })
+    return true
+  }
 
   ctx.effect(() => ctx.webServer.register({
     kind: 'exact',
@@ -715,14 +852,17 @@ export function apply(ctx) {
       if (req.headers[GUARD_HEADER] !== GUARD_VALUE) {
         return sendJson(res, 403, { ok: false, message: 'missing confirmation header' })
       }
+      if (rejectBusy(res)) return
+      operation = 'install-market'
       try {
         const installed = await installMarket()
         // The market has a Host half, so it needs a full restart to load.
-        await writePending([])
         sendJson(res, 200, { ok: true, ...installed, restartRequired: true })
       } catch (error) {
         const code = (error && error.code) || 'install-failed'
         sendJson(res, 500, { ok: false, code, message: error instanceof Error ? error.message : String(error) })
+      } finally {
+        operation = null
       }
     },
   }), 'restart-plugin: install-market route')
@@ -738,23 +878,39 @@ export function apply(ctx) {
       }
       let names = []
       try {
-        const body = JSON.parse((await readBody(req)) || '{}')
-        names = Array.isArray(body.names) ? body.names.filter((name) => typeof name === 'string') : []
+        const { text, overflow } = await readBody(req)
+        if (overflow) return sendJson(res, 413, { ok: false, code: 'body-too-large', message: 'request body is too large' })
+        const body = JSON.parse(text || '{}')
+        const valid = body !== null && typeof body === 'object' && !Array.isArray(body)
+        names = valid && Array.isArray(body.names)
+          ? body.names.filter((name) => typeof name === 'string' && name !== '')
+          : []
       } catch {
         return sendJson(res, 400, { ok: false, code: 'bad-request', message: 'body must be JSON' })
       }
       if (names.length === 0) return sendJson(res, 400, { ok: false, code: 'no-targets', message: 'no package names given' })
+      if (rejectBusy(res)) return
+      operation = 'update'
       try {
         await resolveTargets(names)
-        const { results, deferred } = await updatePlugins(names)
+        const { results, deferred, pendingCount } = await updatePlugins(names)
         const failed = results.find((result) => !result.ok)
         if (failed !== undefined) {
-          return sendJson(res, 500, { ok: false, code: 'update-failed', message: failed.output.trim() || `${failed.name} failed`, results, deferred })
+          return sendJson(res, 500, {
+            ok: false,
+            code: 'update-failed',
+            message: failed.output.trim() || `${failed.name} failed`,
+            results,
+            deferred,
+            pendingCount,
+          })
         }
-        sendJson(res, 200, { ok: true, results, deferred, restartRequired: true })
+        sendJson(res, 200, { ok: true, results, deferred, pendingCount, restartRequired: pendingCount > 0 })
       } catch (error) {
         const code = (error && error.code) || 'update-failed'
         sendJson(res, 400, { ok: false, code, message: error instanceof Error ? error.message : String(error) })
+      } finally {
+        operation = null
       }
     },
   }), 'restart-plugin: update route')
@@ -771,7 +927,10 @@ export function apply(ctx) {
       }
       let body = {}
       try {
-        body = JSON.parse((await readBody(req)) || '{}')
+        const { text, overflow } = await readBody(req)
+        if (overflow) return sendJson(res, 413, { ok: false, code: 'body-too-large', message: 'request body is too large' })
+        const parsed = JSON.parse(text || '{}')
+        body = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
       } catch {
         body = {}
       }
@@ -782,15 +941,41 @@ export function apply(ctx) {
           message: `full restart is not available in this runtime (${basename(process.execPath)} on ${process.platform})`,
         })
       }
+      if (rejectBusy(res)) return
+      operation = 'restart'
+      let workerStarted = false
+      let pendingBefore = null
+      let dir
       try {
         // The market cannot replace itself while it owns the running bundle, so a
         // restart that finds a newer market hands that one update to the worker.
-        let selfUpdate = { needed: false, command: '' }
-        if (body.updateSelf !== false) selfUpdate = await selfUpdateCommand().catch(() => ({ needed: false, command: '' }))
-        // Everything pending is about to be loaded by the relaunched process, so
-        // the pending list is cleared before the app goes away.
-        await writePending([])
+        let selfUpdate = { needed: false, command: '', dir: undefined }
+        if (body.updateSelf !== false) {
+          selfUpdate = await selfUpdateCommand().catch(() => ({ needed: false, command: '', dir: undefined }))
+        }
+        dir = selfUpdate.dir
+        if (dir === undefined) {
+          try {
+            dir = (await installedPlugins()).dir
+          } catch {
+            dir = undefined
+          }
+        }
+        /* Everything pending is about to be loaded by the relaunched process.
+           Clear the queue only once the profile is known, and put it back if the
+           worker could not be created. */
+        if (dir !== undefined) {
+          pendingBefore = await readPending(dir)
+          await writePending([], dir)
+        }
         const started = await startRelaunch(selfUpdate.command)
+        workerStarted = true
+        /* If the worker somehow leaves this process alive, do not lock out the
+           next restart or update forever. */
+        const unlock = setTimeout(() => {
+          if (operation === 'restart') operation = null
+        }, 30000)
+        if (typeof unlock.unref === 'function') unlock.unref()
         sendJson(res, 202, {
           ok: true,
           mode: 'full',
@@ -798,11 +983,16 @@ export function apply(ctx) {
           selfUpdate: selfUpdate.needed ? { package: SELF_HOST_PACKAGE, from: selfUpdate.from, to: selfUpdate.to } : null,
         })
       } catch (error) {
+        if (!workerStarted && dir !== undefined && pendingBefore !== null) {
+          await writePending(pendingBefore, dir)
+        }
         sendJson(res, 500, {
           ok: false,
           code: 'spawn-failed',
           message: error instanceof Error ? error.message : String(error),
         })
+      } finally {
+        if (!workerStarted) operation = null
       }
     },
   }), 'restart-plugin: restart route')

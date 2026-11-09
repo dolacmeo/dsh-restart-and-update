@@ -7,17 +7,19 @@ DSH 插件：侧栏底部动作行里的「重启」+「更新插件」两个按
 - **入口行**：侧栏 `footArea` 里的 `sidebar.footer.action`（官方说明：设置按钮旁的可选动作），
   排在官方/第三方条目之后（order 1000）。**两个按钮共用这一行**，靠一次注册同时画出：
   - 左：「重启」——44px 行高、左侧 24px 图标位 + 18px 箭头图标、右侧文字。
-    **只有"已经更新完、等着重启生效"的插件才会让它出现橙色提醒 badge**
-    （`--dsw-alias-state-warn-primary`），tooltip 写「N 个插件已更新，等重启生效」；
+    **只有已经应用或已排队、等着重启生效的更新才会让它出现橙色提醒 badge**
+    （亮色/暗色两套橙色调，保证数字对比度），tooltip 写「N 项更新等待重启」；
     只是"有更新可选"并不会让重启按钮出现数字 —— 那是更新按钮的事。
     重启弹窗里也复述同一句。
-  - 右：**有更新时**是「更新插件」（图标为向下箭头落到横线），带蓝色数量 badge；
+  - 右：**有更新时**是「更新插件」（图标为向下箭头落到横线），带绿色数量 badge
+    （暗色下换成亮绿底 + 深色数字，保证对比度）；
     **没有更新时**变成「插件市场」（提包图标），点击在本插件自己的浮层里打开市场面板
     （见下面「插件市场」一节；不是切 `dsh-market` 面板 —— 那个 key 默认不存在）。
   - 侧栏收进 56px 轨道时两个按钮退成 36×36 图标，badge 变成右上角小圆点。
 - **重启弹窗**：标题 + 说明 + 两行按钮 —— 第一行 `重启GUI` / `完全重启`，第二行 `取消` 独占通栏。
 - **更新弹窗**：标题 + 说明 + 可滚动插件列表（每行：插件名、当前版本 + 发布时间 → 新版本 + 发布时间，
-  行尾标 `需完全重启` / `刷新即可`），底部两按钮 `取消`（左）/ `更新 (n)`（右）。
+  行尾标 `需完全重启` / `刷新即可`），底部 `取消`（左）/ `更新 (n)`（右），再下面一行是通栏
+  「插件市场」按钮；点击会关闭更新弹窗并直接打开市场浮层。
   - 列表 `max-height: min(52vh, 420px)` + `overflow-y:auto`，卡片本身
     `max-height: calc(100vh - 48px)`，列表再长也只滚动列表，不会把按钮挤出屏幕。
 - **检测时机**：客户端模块挂载后 300ms 检测一次（即页面/应用启动后就有 badge），
@@ -33,8 +35,8 @@ DSH 插件：侧栏底部动作行里的「重启」+「更新插件」两个按
 
 ## 插件市场
 
-没有待更新插件时，第二个按钮变成「插件市场」。点击后由本插件开一个全屏浮层，
-里面是市场自己的面板（`discover` 分栏）。
+没有待更新插件时，第二个按钮变成「插件市场」；更新弹窗里也有同样的入口。
+点击后由本插件开一个全屏浮层，里面是市场自己的面板（`discover` 分栏）。
 
 - **为什么不是 `selectPanel('dsh-market')`**（之前的错误做法）：市场的侧栏面板
   **默认关闭**（市场源码注释：*Off by default*），所以 `main` 槽位里根本没有 `dsh-market` 这个 key，
@@ -60,12 +62,14 @@ DSH 插件：侧栏底部动作行里的「重启」+「更新插件」两个按
 - **检测**：`GET /dsh-restart-and-update/updates` 读 profile 的 `package.json`，只对 npm 依赖逐个查
   `registry.npmjs.org`（完整 packument，因为缩略版不含 `time`），比较 semver，返回
   `{name, installedVersion, installedAt, latestVersion, latestAt, needsRestart}`，外加两份互相独立的清单：
-  - `updatable` / `packages` —— **还没更新**的插件，驱动更新按钮的蓝色 badge。
-  - `pendingCount` / `pending` —— **已经更新完、还没被加载**的插件，驱动重启按钮的橙色 badge。
+  - `updatable` / `packages` —— **还没更新**的插件，驱动更新按钮的绿色 badge。
+  - `pendingCount` / `pending` —— **已经应用或已排队（含 dshmarket 延迟更新）、还没被加载**的更新，
+    驱动重启按钮的橙色 badge。
   两者互不派生：没按更新之前，重启按钮永远没有数字。
-  `pending` 记在 Host 的 `%TEMP%\dsh-restart-and-update\pending-updates.json`（不是页面状态），
-  所以刷新页面不会让它消失；真正「完全重启」时在拉起 worker 前清空。
-  读取时还会按"当前磁盘版本 == 记录里的版本"过滤，插件若又变过就自动掉出清单。
+  `pending` 记在 Host 的 `%TEMP%\dsh-restart-and-update\pending-updates-<profile-hash>.json`（不是页面状态），
+  每个 profile 一份；所以刷新页面不会让它消失；真正「完全重启」时先清空，worker 创建失败会回滚。
+  读取时还会按"当前磁盘版本 == 记录里的版本"过滤，插件若又变过就自动掉出清单；
+  已在 pending 里的包不会再次出现在更新清单里（避免把已排队的市场更新又提示一遍）。
 - **刷新还是重启（调查结论）**：判定规则直接采用市场自己的 `hasHostHalf`
   （`dshmarket/lib/verify.js`）：manifest 里 `dsh.bundle === undefined && dsh.client !== undefined`
   才是纯客户端插件 —— 它没有服务端代码，下次页面加载就从磁盘取到新 bundle，**刷新即可**；
@@ -80,11 +84,12 @@ DSH 插件：侧栏底部动作行里的「重启」+「更新插件」两个按
   - 用**精确版本**而不是 `@latest`：`@latest` 会被 pnpm 的 release-age 策略挡下却仍报成功（实测版本原地不动）。
   - 装完回读 `node_modules/<name>/package.json` 校验磁盘版本；对不上就判失败并给出实际版本。
 - **dshmarket 自己**：它拥有正在运行的 bundle，不能自我替换，所以更新接口把它记为 `deferred`，
-  交给「完全重启」的 worker 在杀进程前执行。**没有新版本时 worker 直接跳过更新步骤**（`update-skipped`）。
+  同时写进 pending（`deferred: true`），重启 badge 立即出现、更新清单不再重复提示它；
+  真正的安装交给「完全重启」的 worker 在杀进程前执行。**没有新版本时 worker 直接跳过更新步骤**（`update-skipped`）。
 
 ## 实现
 
-- Host 半 `index.js`：`webServer.register` 四条 exact 路由
+- Host 半 `index.js`：`webServer.register` 五条 exact 路由
   - `GET  /dsh-restart-and-update/state`   → 平台、exe、`canRestart`、profile、`marketInstalled` / `marketVersion`
   - `GET  /dsh-restart-and-update/updates` → 更新清单（含发布时间、`needsRestart` 分类）
   - `POST /dsh-restart-and-update/update`  → 执行更新
@@ -105,11 +110,12 @@ DSH 插件：侧栏底部动作行里的「重启」+「更新插件」两个按
   - `Start-Process` 只作最后兜底：它会把 worker 的 console 传给应用，只在 WMI 创建失败时使用。
 - Client 半 `client.js`：`window.__ModuleLoader__.load`
   - 槽位：`sidebar.footer.action`（两按钮，order 1000）、`shell.overlay`（重启弹窗 order 900、
-    更新弹窗 order 901）
-  - 无更新时第二个按钮变成市场入口：`ctx.layout.selectPanel('dsh-market')` —— 市场把自己注册成
-    这个 key 的 `main` 面板，`selectPanel` 也是 `dsh-ssh` 打开自己面板用的同一调用。
+    更新弹窗 order 901、市场浮层 order 902）
+  - 无更新时第二个按钮变成市场入口：优先 `ctx.get('market').render(...)` 把市场面板嵌进本插件浮层；
+    取不到服务时才回退到 `layout.selectPanel('plugins')`。
   - 文案走 `ctx.locale.register` + `bind`，zh/en 两套
-  - 样式全部 `--dsw-alias-*` 主题变量，无硬编码配色
+  - 样式以 `--dsw-alias-*` 主题变量为主；绿色/橙色 badge 用亮暗两套固定色，
+    避免暗色下品牌色反白导致数字不可见。
 
 ## 安装
 

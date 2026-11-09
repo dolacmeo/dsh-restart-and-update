@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Restart / Update plugins",
-    "description": "Adds Restart and Update plugins buttons to the sidebar foot; the update button carries a pending-count badge and opens a scrollable list of current and new versions with publish dates."
+    "description": "Adds Restart and Update plugins buttons to the sidebar foot; the update button carries a green pending-count badge and opens a scrollable list of current and new versions with publish dates, with a direct entry to the plugin market."
   }
 }

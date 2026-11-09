@@ -28,11 +28,11 @@ GUI-subsystem stand-in that calls `AttachConsole`: the child path came back
 | | |
 |---|---|
 | **Restart** | Dialog with `Restart GUI` / `Restart everything` / `Cancel`. GUI restart reloads the page only; a full restart kills and relaunches the whole app. |
-| **Badges** | Blue count on the second button = plugins with a newer version available. Orange count on Restart = plugins **already updated** whose new code is not loaded yet. These are deliberately independent: nothing is "waiting for a restart" until you press Update. |
-| **Updates** | Lists each plugin's current version and publish date against the new one, in a height-capped, scrollable list. Installs through the profile's own launcher (`dsh plugin add <name>@<exact version>`), then re-reads the on-disk manifest to verify. |
+| **Badges** | Green count on the second button = plugins with a newer version available. Orange count on Restart = updates **applied or queued** whose new code is not loaded yet. These are deliberately independent: nothing is "waiting for a restart" until you press Update or queue the market. |
+| **Updates** | Lists each plugin's current version and publish date against the new one, in a height-capped, scrollable list. Installs through the profile's own launcher (`dsh plugin add <name>@<exact version>`), then re-reads the on-disk manifest to verify. The dialog also carries a Plugin market button that closes it and opens the market sheet. |
 | **Restart or reload?** | Decided by the same rule the market uses (`hasHostHalf`): a package with only `dsh.client` is browser code and takes effect on reload; anything with a Host half needs the full restart. |
 | **The market itself** | `dshmarket` cannot replace its own running bundle, so a full restart hands that one update to the detached worker, which runs it *before* the process dies — and skips the step entirely when there is nothing newer. |
-| **Market entry point** | With no updates pending, the second button opens the market in a sheet of this plugin's own, using the market's published `market.render()` service. If the market is not installed, the sheet offers to install it. |
+| **Market entry point** | With no updates pending, the second button opens the market in a sheet of this plugin's own, using the market's published `market.render()` service. The update dialog has the same entry. If the market is not installed, the sheet offers to install it. |
 
 ## API
 
