@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Restart / Update plugins",
-    "description": "One-click plugin updates and restart from the sidebar: the update button carries a count, lists current and new versions with publish dates, and becomes Restart when the batch is done."
+    "description": "Plugin updates and restarts in the sidebar: pick which updates to apply, keep a blacklist for the ones you never want, uninstall from the same list, and get the window back where it was."
   }
 }

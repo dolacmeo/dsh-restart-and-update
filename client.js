@@ -27,7 +27,7 @@ window.__ModuleLoader__.load({
         updatesIntro: '这些插件有新版本：',
         checking: '正在检查更新…',
         updatesEmpty: '所有插件都是最新版本。',
-        updatesChecked: '已检查 {checked} 个插件。',
+        updatesChecked: '已检查 {checked} 个插件',
         current: '当前',
         latest: '新版',
         updating: '正在更新…',
@@ -48,10 +48,45 @@ window.__ModuleLoader__.load({
         marketOpenPluginsPage: '打开插件页',
         restartBadge: '{count} 项更新等待重启',
         needsRestart: '需完全重启',
-        reloadOnly: '刷新即可',
+        reloadOnly: '更新后刷新即可',
+        restartHint: '这个插件有服务端代码，更新后需要完全重启才会加载新版本。',
+        reloadHint: '更新时服务端部分会热应用，刷新页面后前端部分也会换成新版本。',
         afterUpdate: '更新完成：{restart} 个插件需完全重启，{reload} 个刷新页面即可。',
         allReload: '更新完成：刷新页面即可生效。',
         allRestart: '更新完成：需要完全重启才会生效。',
+        allHot: '更新完成：新版本已经在运行中生效。',
+        checkNow: '重新检查',
+        refresh: '重新检查',
+        checkingNow: '正在重新检查…',
+        rechecked: '已重新检查 {checked} 个插件（{time}）',
+        settings: '设置',
+        settingsTitle: '插件更新设置',
+        settingsIntro: '这些设置保存在本机，重启后依然有效。',
+        blacklistTitle: '更新黑名单',
+        blacklistHint: '勾选的插件不参与更新检测：列表里不出现，也不会被更新。',
+        blacklistEmpty: '这个 profile 里还没有可以更新的插件。',
+        backToList: '返回列表',
+        restoreWindowTitle: '窗口在原位置重启',
+        restoreWindowHint: '完全重启后，把窗口放回上次的位置和大小。',
+        restoreWindowUnsupported: '当前平台不支持：窗口位置记忆只在 Windows 桌面版可用。',
+        save: '保存',
+        saving: '正在保存…',
+        settingsSaved: '设置已保存。',
+        settingsFailed: '设置没有保存：',
+        uninstall: '卸载',
+        uninstallTitle: '卸载插件',
+        uninstallQuestion: '要卸载 {name} 吗？',
+        uninstallHint: '卸载后需要完全重启，才能把它从正在运行的进程里彻底移除；卸载本身在重启前不会破坏当前会话。',
+        uninstalling: '正在卸载…',
+        uninstallFailed: '卸载失败：',
+        uninstallDone: '{name} 已卸载。',
+        selectHint: '只有勾选的会更新',
+        selected: '已选择 {count} 个',
+        selectionRequired: '请至少勾选一个插件',
+        hotApply: '更新后自动生效',
+        ignoredNote: '忽略 {count} 个',
+        hostStaleHint: 'Host 端还是旧版本：设置页和卸载接口要重启一次才会加载，请用「重启 → 完全重启」。',
+        localSource: '本地',
       },
       en: {
         restart: 'Restart',
@@ -72,7 +107,7 @@ window.__ModuleLoader__.load({
         updatesIntro: 'These plugins have newer versions:',
         checking: 'Checking for updates…',
         updatesEmpty: 'Every plugin is up to date.',
-        updatesChecked: 'Checked {checked} plugins.',
+        updatesChecked: 'Checked {checked} plugins',
         current: 'now',
         latest: 'new',
         updating: 'Updating…',
@@ -93,10 +128,45 @@ window.__ModuleLoader__.load({
         marketOpenPluginsPage: 'Open the Plugins page',
         restartBadge: '{count} update(s) waiting for a restart',
         needsRestart: 'needs restart',
-        reloadOnly: 'reload is enough',
+        reloadOnly: 'reload after updating',
+        restartHint: 'This plugin ships server-side code; a full restart loads the new version.',
+        reloadHint: 'The server half is swapped live during the update; a page reload brings the new client half.',
         afterUpdate: 'Updated: {restart} need a full restart, {reload} only need a reload.',
         allReload: 'Updated: reload the page to apply.',
         allRestart: 'Updated: a full restart is required.',
+        allHot: 'Updated: the new versions are already running.',
+        checkNow: 'Check again',
+        refresh: 'Check again',
+        checkingNow: 'Checking again…',
+        rechecked: 'Re-checked {checked} plugins ({time})',
+        settings: 'Settings',
+        settingsTitle: 'Plugin update settings',
+        settingsIntro: 'These settings are stored on this machine and survive a restart.',
+        blacklistTitle: 'Update blacklist',
+        blacklistHint: 'Checked plugins are left out of the update check: they are not listed, counted, or updated.',
+        blacklistEmpty: 'This profile has no updatable plugins yet.',
+        backToList: 'Back to the list',
+        restoreWindowTitle: 'Reopen the window where it was',
+        restoreWindowHint: 'After a full restart the window returns to its previous position and size.',
+        restoreWindowUnsupported: 'Not on this platform: window memory only works in the Windows desktop app.',
+        save: 'Save',
+        saving: 'Saving…',
+        settingsSaved: 'Settings saved.',
+        settingsFailed: 'Settings were not saved: ',
+        uninstall: 'Uninstall',
+        uninstallTitle: 'Uninstall plugin',
+        uninstallQuestion: 'Uninstall {name}?',
+        uninstallHint: 'The plugin leaves the profile now and unloads on the next full restart; the current session keeps working until then.',
+        uninstalling: 'Uninstalling…',
+        uninstallFailed: 'Uninstall failed: ',
+        uninstallDone: '{name} has been uninstalled.',
+        selectHint: 'only checked ones update',
+        selected: '{count} selected',
+        selectionRequired: 'Check at least one plugin',
+        hotApply: 'applies live',
+        ignoredNote: '{count} skipped',
+        hostStaleHint: 'The Host half is still the previous build: the settings page and the uninstall route load after one full restart (Restart → Restart everything).',
+        localSource: 'local',
       },
     };
 
@@ -120,6 +190,8 @@ window.__ModuleLoader__.load({
       updatesChecked: 0,
       updatesError: null,
       updatesUpdated: 0,
+      updatesRestartCount: 0,
+      updatesLive: false,
       updatesDeferred: [],
       /* Applied updates whose new code is on disk but not yet loaded: this is
          what the restart button warns about. It is NOT "updates that would need
@@ -133,6 +205,31 @@ window.__ModuleLoader__.load({
       marketMode: 'panel',
       marketVersion: null,
       marketError: null,
+      /* Which page of the update dialog is showing: the plugin list, the
+         settings page, or the uninstall confirmation for one row. */
+      updatesView: 'list',
+      /* Every installed package, as last reported by the check. The settings
+         page edits the blacklist from this list. */
+      updatesInstalled: [],
+      updatesIgnored: 0,
+      /* True when the running Host can load updated files without a restart. */
+      updatesHotApply: false,
+      /* name -> boolean. Missing means "selected": every plugin starts checked. */
+      updatesSelection: {},
+      /* A one-line result shown above the list (settings saved, plugin removed). */
+      updatesNotice: null,
+      settings: { blacklist: [], restoreWindow: true },
+      /* True when the Host half predates the settings/uninstall routes: the new
+         page then explains that a full restart is what loads them, instead of
+         pretending the platform lacks the feature. */
+      hostStale: false,
+      settingsFile: null,
+      windowStateSupported: false,
+      settingsBusy: false,
+      settingsError: null,
+      uninstallTarget: null,
+      uninstallBusy: false,
+      uninstallError: null,
     };
     const listeners = new Set();
     const patch = (next) => {
@@ -193,7 +290,7 @@ body[data-ds-dark-theme] .dsw-rst-badge{--dsw-rst-badge-bg:#3fb950;--dsw-rst-bad
   border:1px solid var(--dsw-alias-border-l1,rgba(0,0,0,.1));border-radius:14px;
   background:var(--dsw-alias-bg-overlay,#fff);color:var(--dsw-alias-label-primary,#16181c);
   box-shadow:0 20px 52px rgba(0,0,0,.3);text-align:left;max-height:calc(100vh - 48px)}
-.dsw-rst-card-wide{width:460px}
+.dsw-rst-card-wide{width:500px}
 .dsw-rst-title{margin:0;font-size:15px;font-weight:600;line-height:1.4;flex:0 0 auto}
 .dsw-rst-intro{margin:0;font-size:13px;line-height:1.6;color:var(--dsw-alias-label-secondary,#5f6368);flex:0 0 auto}
 .dsw-rst-hints{display:flex;flex-direction:column;gap:4px;margin:0;font-size:12px;line-height:1.55;
@@ -254,6 +351,56 @@ body[data-ds-dark-theme] .dsw-rst-badge-warn{--dsw-rst-badge-bg:#f59e0b;--dsw-rs
 .dsw-rst-sheet-body{flex:1 1 auto;min-height:0;overflow:auto;overscroll-behavior:contain}
 .dsw-rst-sheet-plain{width:min(420px,94vw);height:auto;max-height:min(70vh,560px)}
 .dsw-rst-sheet-msg{flex:0 0 auto;display:flex;flex-direction:column;gap:14px;padding:18px 20px 20px}
+.dsw-rst-head{display:flex;align-items:center;gap:6px;flex:0 0 auto;min-height:30px;margin:0 0 -4px}
+.dsw-rst-head .dsw-rst-title{flex:1 1 auto;min-width:0}
+.dsw-rst-iconbtn{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;box-sizing:border-box;
+  width:30px;height:30px;padding:0;border:0;border-radius:8px;background:transparent;
+  color:var(--dsw-alias-label-secondary,#5f6368);cursor:pointer;-webkit-appearance:none;appearance:none}
+.dsw-rst-iconbtn:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14));
+  color:var(--dsw-alias-label-primary,#16181c)}
+.dsw-rst-iconbtn:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#247bbf);outline-offset:1px}
+.dsw-rst-iconbtn:disabled{opacity:.45;cursor:default}
+.dsw-rst-iconbtn svg{width:17px;height:17px;display:block}
+.dsw-rst-iconbtn[data-active="true"]{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14));
+  color:var(--dsw-alias-label-primary,#16181c)}
+.dsw-rst-iconbtn[data-spin="true"] svg{animation:dsw-rst-spin 1s linear infinite}
+@keyframes dsw-rst-spin{to{transform:rotate(360deg)}}
+.dsw-rst-row-head{display:flex;align-items:center;gap:8px;min-width:0}
+.dsw-rst-check{flex:0 0 auto;box-sizing:border-box;width:15px;height:15px;margin:0;cursor:pointer;
+  accent-color:var(--dsw-alias-brand-primary,#247bbf)}
+.dsw-rst-item-name{flex:1 1 auto;min-width:0}
+.dsw-rst-uninstall{display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;box-sizing:border-box;
+  width:24px;height:24px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-secondary,#5f6368);
+  cursor:pointer;opacity:.62;-webkit-appearance:none;appearance:none}
+.dsw-rst-item:hover .dsw-rst-uninstall,.dsw-rst-uninstall:focus-visible{opacity:1}
+.dsw-rst-uninstall:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14));
+  color:var(--dsw-alias-state-error-primary,#d93025)}
+.dsw-rst-uninstall:disabled{opacity:.35;cursor:default}
+.dsw-rst-uninstall svg{width:15px;height:15px;display:block}
+.dsw-rst-item[data-checked="false"] .dsw-rst-item-name,
+.dsw-rst-item[data-checked="false"] .dsw-rst-item-vers{opacity:.52}
+.dsw-rst-settings{display:flex;flex-direction:column;gap:12px;flex:1 1 auto;min-height:0;overflow-y:auto;
+  overscroll-behavior:contain}
+.dsw-rst-setting-title{margin:0;font-size:13px;font-weight:600;line-height:1.4}
+.dsw-rst-setting-hint{margin:0;font-size:12px;line-height:1.55;color:var(--dsw-alias-label-secondary,#5f6368)}
+.dsw-rst-setting-note{margin:0;font-size:12px;line-height:1.5;color:var(--dsw-alias-label-secondary,#5f6368)}
+.dsw-rst-blacklist{display:flex;flex-direction:column;gap:2px;margin:0;padding:4px;list-style:none;overflow-y:auto;
+  max-height:min(32vh,260px);border:1px solid var(--dsw-alias-border-l1,rgba(0,0,0,.1));border-radius:10px}
+.dsw-rst-blacklist-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px}
+.dsw-rst-blacklist-item:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(127,127,127,.14))}
+.dsw-rst-blacklist-name{flex:1 1 auto;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.dsw-rst-blacklist-vers{flex:0 0 auto;font-size:12px;color:var(--dsw-alias-label-secondary,#5f6368);
+  font-variant-numeric:tabular-nums}
+.dsw-rst-switch{display:flex;align-items:flex-start;gap:10px;cursor:pointer;user-select:none}
+.dsw-rst-switch input{flex:0 0 auto;width:16px;height:16px;margin:1px 0 0;cursor:pointer;
+  accent-color:var(--dsw-alias-brand-primary,#247bbf)}
+.dsw-rst-switch input:disabled{cursor:default}
+.dsw-rst-switch-copy{display:flex;flex-direction:column;gap:3px;min-width:0}
+.dsw-rst-switch[data-disabled="true"]{cursor:default;opacity:.6}
+.dsw-rst-divider{height:1px;margin:0;border:0;background:var(--dsw-alias-border-l1,rgba(0,0,0,.1))}
+.dsw-rst-warn{margin:0;font-size:12px;line-height:1.55;color:#b45309;flex:0 0 auto}
+body[data-ds-dark-theme] .dsw-rst-warn{color:#fbbf24}
 `;
 
     const RestartIcon = () => h(
@@ -315,6 +462,72 @@ body[data-ds-dark-theme] .dsw-rst-badge-warn{--dsw-rst-badge-bg:#f59e0b;--dsw-rs
       }),
     );
 
+    const RefreshIcon = () => h(
+      'svg',
+      { viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true', focusable: 'false' },
+      h('path', {
+        d: 'M4 12a8 8 0 1 0 2.34-5.66',
+        stroke: 'currentColor',
+        strokeWidth: 2,
+        strokeLinecap: 'round',
+      }),
+      h('path', {
+        d: 'M4 4.2v4.2h4.2',
+        stroke: 'currentColor',
+        strokeWidth: 2,
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+      }),
+    );
+
+    const SettingsIcon = () => h(
+      'svg',
+      { viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true', focusable: 'false' },
+      h('path', {
+        d: 'M4 7.5h7.6M16.4 7.5H20M4 16.5h3.6M12.4 16.5H20',
+        stroke: 'currentColor',
+        strokeWidth: 2,
+        strokeLinecap: 'round',
+      }),
+      h('circle', { cx: 14, cy: 7.5, r: 2.4, stroke: 'currentColor', strokeWidth: 2 }),
+      h('circle', { cx: 10, cy: 16.5, r: 2.4, stroke: 'currentColor', strokeWidth: 2 }),
+    );
+
+    const BackIcon = () => h(
+      'svg',
+      { viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true', focusable: 'false' },
+      h('path', {
+        d: 'M14.5 5.5 8 12l6.5 6.5',
+        stroke: 'currentColor',
+        strokeWidth: 2,
+        strokeLinecap: 'round',
+        strokeLinejoin: 'round',
+      }),
+    );
+
+    const TrashIcon = () => h(
+      'svg',
+      { viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true', focusable: 'false' },
+      h('path', {
+        d: 'M4.5 7h15',
+        stroke: 'currentColor',
+        strokeWidth: 2,
+        strokeLinecap: 'round',
+      }),
+      h('path', {
+        d: 'M9.5 7V5.6A1.6 1.6 0 0 1 11.1 4h1.8a1.6 1.6 0 0 1 1.6 1.6V7',
+        stroke: 'currentColor',
+        strokeWidth: 2,
+        strokeLinejoin: 'round',
+      }),
+      h('path', {
+        d: 'M6.8 7l.8 11.5A1.7 1.7 0 0 0 9.3 20h5.4a1.7 1.7 0 0 0 1.7-1.5L17.2 7',
+        stroke: 'currentColor',
+        strokeWidth: 2,
+        strokeLinejoin: 'round',
+      }),
+    );
+
     return {
       inject: ['slots'],
       apply(ctx) {
@@ -367,7 +580,14 @@ body[data-ds-dark-theme] .dsw-rst-badge-warn{--dsw-rst-badge-bg:#f59e0b;--dsw-rs
              market. The next check refreshes this list in place. A check that
              is already in flight stays in flight so reopening cannot start a
              duplicate request. */
-          patch({ updatesOpen: false, updatesPhase: store.updatesPhase === 'checking' ? 'checking' : 'idle' });
+          patch({
+            updatesOpen: false,
+            updatesPhase: store.updatesPhase === 'checking' ? 'checking' : 'idle',
+            updatesView: 'list',
+            uninstallTarget: null,
+            uninstallError: null,
+            settingsError: null,
+          });
         };
 
         /**
@@ -508,12 +728,19 @@ body[data-ds-dark-theme] .dsw-rst-badge-warn{--dsw-rst-badge-bg:#f59e0b;--dsw-rs
           });
         };
 
-        /** Ask the Host which plugins the registry has newer versions for. */
-        const checkUpdates = () => {
+        /**
+         * Ask the Host which plugins the registry has newer versions for.
+         * `refresh` is the dialog's refresh button: it also drops the Host's
+         * registry cache, so the answer is new rather than ten minutes old.
+         */
+        const checkUpdates = (refresh) => {
           if (store.updatesPhase === 'checking' || store.updatesPhase === 'updating') return;
+          /* A manual re-check keeps the rows that are on screen: replacing the
+             whole body with "checking" is what made the dialog flash. */
+          const manual = refresh === true;
           const token = ++updatesCheckToken;
-          patch({ updatesPhase: 'checking', updatesError: null });
-          fetch(`${ROUTE}/updates`, { headers: { accept: 'application/json' } })
+          patch({ updatesPhase: 'checking', updatesError: null, updatesNotice: null });
+          fetch(`${ROUTE}/updates${refresh === true ? '?refresh=1' : ''}`, { headers: { accept: 'application/json' } })
             .then(async (response) => {
               const body = await response.json().catch(() => null);
               if (!response.ok || !body || body.ok !== true) {
@@ -523,10 +750,34 @@ body[data-ds-dark-theme] .dsw-rst-badge-warn{--dsw-rst-badge-bg:#f59e0b;--dsw-rs
                  is the newer truth, so this check is dropped entirely. */
               if (token !== updatesCheckToken) return;
               const pending = Array.isArray(body.pending) ? body.pending : [];
+              const packages = Array.isArray(body.packages) ? body.packages : [];
+              /* A row keeps whatever the user chose, and a row that appeared
+                 after that choice starts checked. A batch that completed
+                 cleared the map, so its plugins are checked again next time. */
+              const selection = {};
+              for (const row of packages) selection[row.name] = store.updatesSelection[row.name] !== false;
+              /* Fields this page needs were added together with the settings
+                 and uninstall routes. Their absence means the Host still runs
+                 the previous build: the page can show everything, but saving
+                 and removing would 404 until the app is restarted once. */
+              const currentHost = Array.isArray(body.installed) && typeof body.hotApply === 'boolean';
+              const stamp = new Date();
+              const time = [stamp.getHours(), stamp.getMinutes(), stamp.getSeconds()]
+                .map((part) => String(part).padStart(2, '0'))
+                .join(':');
               patch({
                 updatesPhase: 'idle',
-                updates: Array.isArray(body.packages) ? body.packages : [],
+                // Only a manual press gets the confirmation line; the invisible
+                // startup / visibility checks must not pop a notice.
+                updatesNotice: manual ? t('rechecked', { checked: body.checked ?? 0, time }) : null,
+                hostStale: !currentHost,
+                updates: packages,
+                updatesSelection: selection,
+                updatesInstalled: Array.isArray(body.installed) ? body.installed : [],
+                updatesIgnored: typeof body.ignored === 'number' ? body.ignored : 0,
+                updatesHotApply: body.hotApply === true,
                 updatesChecked: typeof body.checked === 'number' ? body.checked : 0,
+                settings: body.settings && typeof body.settings === 'object' ? body.settings : store.settings,
                 restartPending: pending.length,
                 checkedOnce: true,
                 updatesError: null,
@@ -540,8 +791,140 @@ body[data-ds-dark-theme] .dsw-rst-badge-warn{--dsw-rst-badge-bg:#f59e0b;--dsw-rs
 
         const openUpdates = () => {
           if (store.updatesPhase === 'updating') return;
-          patch({ updatesOpen: true, updatesError: null, updatesUpdated: 0, updatesDeferred: [] });
+          patch({
+            updatesOpen: true,
+            updatesView: 'list',
+            updatesError: null,
+            updatesUpdated: 0,
+            updatesRestartCount: 0,
+            updatesLive: false,
+            updatesDeferred: [],
+            updatesNotice: null,
+            uninstallTarget: null,
+            uninstallError: null,
+            settingsError: null,
+          });
           checkUpdates();
+        };
+
+        const toggleSelection = (name) => {
+          patch({ updatesSelection: { ...store.updatesSelection, [name]: store.updatesSelection[name] === false } });
+        };
+
+        /** The update dialog's settings page, loaded fresh from the Host. */
+        const loadSettings = () => {
+          fetch(`${ROUTE}/settings`, { headers: { accept: 'application/json' } })
+            .then(async (response) => {
+              const body = await response.json().catch(() => null);
+              if (!response.ok || !body || body.ok !== true) {
+                throw new Error((body && body.message) || `HTTP ${response.status}`);
+              }
+              patch({
+                settings: body.settings && typeof body.settings === 'object' ? body.settings : store.settings,
+                settingsFile: typeof body.settingsFile === 'string' ? body.settingsFile : null,
+                windowStateSupported: body.windowStateSupported === true,
+                hostStale: false,
+                settingsError: null,
+              });
+            })
+            .catch((error) => {
+              /* No /settings route: the Host is the previous build. That is a
+                 restart away, not a platform limitation. */
+              patch({
+                hostStale: true,
+                settingsError: String((error && error.message) || error),
+              });
+            });
+        };
+
+        const openSettings = () => {
+          if (store.updatesPhase === 'updating') return;
+          patch({ updatesView: 'settings', settingsError: null, updatesNotice: null });
+          loadSettings();
+          // The blacklist editor lists every installed plugin; a dialog opened
+          // straight into settings still needs that list.
+          if (store.updatesInstalled.length === 0 && store.updatesPhase === 'idle') checkUpdates();
+        };
+
+        const closeSettings = () => {
+          if (store.settingsBusy === true) return;
+          patch({ updatesView: 'list', settingsError: null });
+        };
+
+        const toggleBlacklist = (name) => {
+          const blacklist = Array.isArray(store.settings.blacklist) ? store.settings.blacklist : [];
+          const next = blacklist.includes(name)
+            ? blacklist.filter((entry) => entry !== name)
+            : [...blacklist, name];
+          patch({ settings: { ...store.settings, blacklist: next } });
+        };
+
+        const toggleRestoreWindow = () => {
+          patch({ settings: { ...store.settings, restoreWindow: store.settings.restoreWindow === false } });
+        };
+
+        const saveSettings = () => {
+          if (store.settingsBusy === true) return;
+          patch({ settingsBusy: true, settingsError: null });
+          fetch(`${ROUTE}/settings`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-dsh-restart-and-update': 'full' },
+            body: JSON.stringify({
+              blacklist: Array.isArray(store.settings.blacklist) ? store.settings.blacklist : [],
+              restoreWindow: store.settings.restoreWindow !== false,
+            }),
+          }).then(async (response) => {
+            const body = await response.json().catch(() => null);
+            if (!response.ok || !body || body.ok !== true) {
+              throw new Error((body && body.message) || `HTTP ${response.status}`);
+            }
+            patch({
+              settingsBusy: false,
+              settings: body.settings && typeof body.settings === 'object' ? body.settings : store.settings,
+              updatesView: 'list',
+              updatesNotice: t('settingsSaved'),
+            });
+            // The blacklist decides what the list shows, so ask again.
+            checkUpdates(true);
+          }).catch((error) => {
+            patch({ settingsBusy: false, settingsError: String((error && error.message) || error) });
+          });
+        };
+
+        const openUninstall = (name) => {
+          if (store.updatesPhase === 'updating') return;
+          patch({ updatesView: 'uninstall', uninstallTarget: name, uninstallError: null, updatesNotice: null });
+        };
+
+        const closeUninstall = () => {
+          if (store.uninstallBusy === true) return;
+          patch({ updatesView: 'list', uninstallTarget: null, uninstallError: null });
+        };
+
+        const confirmUninstall = () => {
+          const name = store.uninstallTarget;
+          if (typeof name !== 'string' || store.uninstallBusy === true) return;
+          patch({ uninstallBusy: true, uninstallError: null });
+          fetch(`${ROUTE}/uninstall`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json', 'x-dsh-restart-and-update': 'full' },
+            body: JSON.stringify({ names: [name] }),
+          }).then(async (response) => {
+            const body = await response.json().catch(() => null);
+            if (!response.ok || !body || body.ok !== true) {
+              throw new Error((body && body.message) || `HTTP ${response.status}`);
+            }
+            patch({
+              uninstallBusy: false,
+              updatesView: 'list',
+              uninstallTarget: null,
+              updatesNotice: t('uninstallDone', { name }),
+              restartPending: typeof body.pendingCount === 'number' ? body.pendingCount : store.restartPending,
+            });
+            checkUpdates(true);
+          }).catch((error) => {
+            patch({ uninstallBusy: false, uninstallError: String((error && error.message) || error) });
+          });
         };
 
         /* The second button is "update" while any update is known, still being
@@ -557,34 +940,45 @@ body[data-ds-dark-theme] .dsw-rst-badge-warn{--dsw-rst-badge-bg:#f59e0b;--dsw-rs
           else openMarket();
         };
 
+        /** The plugins the user left checked; missing means checked. */
+        const selectedUpdates = () => store.updates.filter((row) => store.updatesSelection[row.name] !== false);
+
         const applyUpdates = () => {
-          if (store.updatesPhase !== 'idle' || store.updates.length === 0) return;
+          if (store.updatesPhase !== 'idle') return;
+          const names = selectedUpdates().map((row) => row.name);
+          if (names.length === 0) {
+            patch({ updatesNotice: t('selectionRequired') });
+            return;
+          }
           /* A check still in flight belongs to the state before this batch. */
           updatesCheckToken += 1;
-          patch({ updatesPhase: 'updating', updatesError: null });
+          patch({ updatesPhase: 'updating', updatesError: null, updatesNotice: null });
           fetch(`${ROUTE}/update`, {
             method: 'POST',
             headers: { 'content-type': 'application/json', 'x-dsh-restart-and-update': 'full' },
-            body: JSON.stringify({ names: store.updates.map((row) => row.name) }),
+            body: JSON.stringify({ names }),
           }).then(async (response) => {
             const body = await response.json().catch(() => null);
             if (!response.ok || !body || body.ok !== true) {
               const detail = (body && body.message) || `HTTP ${response.status}`;
               throw new Error(detail);
             }
-            const done = Array.isArray(body.results) ? body.results.filter((row) => row.ok).length : store.updates.length;
+            const results = Array.isArray(body.results) ? body.results : [];
+            const applied = results.filter((row) => row.ok);
+            const restartCount = applied.filter((row) => row.needsRestart === true).length;
             const deferred = Array.isArray(body.deferred) ? body.deferred : [];
             // The Host's pending file is authoritative: it also includes the
             // market the restart worker has been handed as a deferred update.
-            const pendingCount = typeof body.pendingCount === 'number'
-              ? body.pendingCount
-              : store.updates.filter((row) => row.needsRestart !== false).length + deferred.length;
+            const pendingCount = typeof body.pendingCount === 'number' ? body.pendingCount : restartCount + deferred.length;
             patch({
               updatesPhase: 'done',
-              updatesUpdated: done,
+              updatesUpdated: applied.length,
+              updatesRestartCount: restartCount,
+              updatesLive: body.hotApplied === true,
               updatesDeferred: deferred,
               restartPending: pendingCount,
               updates: [],
+              updatesSelection: {},
             });
           }).catch((error) => {
             patch({ updatesPhase: 'idle', updatesError: String((error && error.message) || error) });
@@ -758,17 +1152,27 @@ body[data-ds-dark-theme] .dsw-rst-badge-warn{--dsw-rst-badge-bg:#f59e0b;--dsw-rs
           const checking = state.updatesPhase === 'checking';
           const done = state.updatesPhase === 'done';
           const rows = state.updates;
+          const view = state.updatesView;
+          const settingsBusy = state.settingsBusy === true;
+          const uninstallBusy = state.uninstallBusy === true;
+
+          const backToList = () => {
+            if (view === 'settings') closeSettings();
+            else if (view === 'uninstall') closeUninstall();
+          };
 
           React.useEffect(() => {
             if (!open) return undefined;
             const onKeyDown = (event) => {
               if (event.key !== 'Escape') return;
               event.stopPropagation();
-              if (!busy) closeUpdates();
+              if (busy || settingsBusy || uninstallBusy) return;
+              if (state.updatesView !== 'list') backToList();
+              else closeUpdates();
             };
             window.addEventListener('keydown', onKeyDown, true);
             return () => window.removeEventListener('keydown', onKeyDown, true);
-          }, [open, busy]);
+          }, [open, busy, settingsBusy, uninstallBusy, state.updatesView]);
 
           React.useEffect(() => {
             if (!open) return undefined;
@@ -782,17 +1186,82 @@ body[data-ds-dark-theme] .dsw-rst-badge-warn{--dsw-rst-badge-bg:#f59e0b;--dsw-rs
 
           if (!open) return null;
 
+          const selectedCount = rows.filter((row) => state.updatesSelection[row.name] !== false).length;
+          const blacklist = Array.isArray(state.settings.blacklist) ? state.settings.blacklist : [];
+          /* Every installed plugin, not only the registry ones: a link: or
+             file: package can be blacklisted too, it simply never shows up in
+             the update list anyway. */
+          const settingsTargets = state.updatesInstalled;
+
           const body = [];
-          if (state.updatesPhase === 'checking') {
+          if (view === 'settings') {
+            body.push(h('div', { key: 'settings', className: 'dsw-rst-settings' },
+              state.hostStale ? h('p', { key: 'stale', className: 'dsw-rst-warn' }, t('hostStaleHint')) : null,
+              h('div', null,
+                h('h3', { className: 'dsw-rst-setting-title' }, t('blacklistTitle')),
+                h('p', { className: 'dsw-rst-setting-hint' }, t('blacklistHint')),
+              ),
+              settingsTargets.length === 0
+                ? (state.hostStale
+                  ? null
+                  : h('p', { className: 'dsw-rst-setting-note' }, t('blacklistEmpty')))
+                : h('ul', { className: 'dsw-rst-blacklist' },
+                  settingsTargets.map((row) => h('li', { key: row.name, className: 'dsw-rst-blacklist-item' },
+                    h('input', {
+                      type: 'checkbox',
+                      className: 'dsw-rst-check',
+                      checked: blacklist.includes(row.name),
+                      disabled: settingsBusy,
+                      onChange: () => toggleBlacklist(row.name),
+                      'aria-label': row.name,
+                    }),
+                    h('span', { className: 'dsw-rst-blacklist-name', title: row.name }, row.name),
+                    h('span', { className: 'dsw-rst-blacklist-vers' },
+                      row.installedVersion ?? (row.source === 'npm' ? '' : t('localSource'))),
+                  )),
+                ),
+              h('hr', { className: 'dsw-rst-divider' }),
+              h('label', {
+                className: 'dsw-rst-switch',
+                'data-disabled': state.windowStateSupported ? 'false' : 'true',
+              },
+              h('input', {
+                type: 'checkbox',
+                checked: state.settings.restoreWindow !== false,
+                disabled: !state.windowStateSupported || settingsBusy,
+                onChange: toggleRestoreWindow,
+              }),
+              h('span', { className: 'dsw-rst-switch-copy' },
+                h('span', { className: 'dsw-rst-setting-title' }, t('restoreWindowTitle')),
+                h('span', { className: 'dsw-rst-setting-hint' },
+                  state.hostStale
+                    ? t('hostStaleHint')
+                    : state.windowStateSupported ? t('restoreWindowHint') : t('restoreWindowUnsupported')),
+              )),
+              state.settingsError === null
+                ? null
+                : h('p', { className: 'dsw-rst-error' }, t('settingsFailed') + state.settingsError),
+            ));
+          } else if (view === 'uninstall') {
+            body.push(h('div', { key: 'uninstall', className: 'dsw-rst-rows' },
+              h('p', { className: 'dsw-rst-intro' }, t('uninstallQuestion', { name: state.uninstallTarget })),
+              h('p', { className: 'dsw-rst-status' }, t('uninstallHint')),
+              state.uninstallError === null
+                ? null
+                : h('p', { className: 'dsw-rst-error' }, t('uninstallFailed') + state.uninstallError),
+            ));
+          } else if (checking && rows.length === 0) {
             body.push(h('p', { key: 'checking', className: 'dsw-rst-status' }, t('checking')));
-          } else if (state.updatesPhase === 'done') {
-            const restartCount = state.restartPending;
+          } else if (done) {
+            const restartCount = state.updatesRestartCount;
             const reloadCount = Math.max(0, state.updatesUpdated - restartCount);
             const summary = restartCount > 0 && reloadCount > 0
               ? t('afterUpdate', { restart: restartCount, reload: reloadCount })
               : restartCount > 0
                 ? t('allRestart')
-                : t('allReload');
+                : state.updatesLive === true
+                  ? t('allHot')
+                  : t('allReload');
             body.push(h('p', { key: 'done', className: 'dsw-rst-status', role: 'status' }, summary));
             if (state.updatesDeferred.length > 0) {
               body.push(h('p', { key: 'deferred', className: 'dsw-rst-status' }, t('deferredNote')));
@@ -804,52 +1273,131 @@ body[data-ds-dark-theme] .dsw-rst-badge-warn{--dsw-rst-badge-bg:#f59e0b;--dsw-rs
               rows.map((row) => {
                 const fromDate = shortDate(row.installedAt) ?? t('unknownTime');
                 const toDate = shortDate(row.latestAt) ?? t('unknownTime');
-                return h('li', { key: row.name, className: 'dsw-rst-item' },
+                const checked = state.updatesSelection[row.name] !== false;
+                return h('li', {
+                  key: row.name,
+                  className: 'dsw-rst-item',
+                  'data-checked': checked ? 'true' : 'false',
+                },
+                h('div', { className: 'dsw-rst-row-head' },
+                  h('input', {
+                    type: 'checkbox',
+                    className: 'dsw-rst-check',
+                    checked,
+                    disabled: busy,
+                    onChange: () => toggleSelection(row.name),
+                    'aria-label': row.name,
+                  }),
                   h('span', { className: 'dsw-rst-item-name', title: row.name }, row.name),
-                  h('span', { className: 'dsw-rst-item-vers' },
-                    h('code', null, row.installedVersion),
-                    h('span', { className: 'dsw-rst-time' }, fromDate),
-                    h('span', { className: 'dsw-rst-arrow', 'aria-hidden': 'true' }, '→'),
-                    h('code', null, row.latestVersion),
-                    h('span', { className: 'dsw-rst-time' }, toDate),
-                    h('span', { className: 'dsw-rst-item-flag' },
-                      row.needsRestart === false ? t('reloadOnly') : t('needsRestart')),
-                  ));
+                  h('button', {
+                    type: 'button',
+                    className: 'dsw-rst-uninstall',
+                    title: t('uninstall') + ' ' + row.name,
+                    'aria-label': t('uninstall') + ' ' + row.name,
+                    disabled: busy,
+                    onClick: () => openUninstall(row.name),
+                  }, h(TrashIcon)),
+                ),
+                h('span', { className: 'dsw-rst-item-vers' },
+                  h('code', null, row.installedVersion),
+                  h('span', { className: 'dsw-rst-time' }, fromDate),
+                  h('span', { className: 'dsw-rst-arrow', 'aria-hidden': 'true' }, '→'),
+                  h('code', null, row.latestVersion),
+                  h('span', { className: 'dsw-rst-time' }, toDate),
+                  h('span', {
+                    className: 'dsw-rst-item-flag',
+                    title: row.needsRestart === false ? t('reloadHint') : t('restartHint'),
+                  }, row.needsRestart === false ? t('reloadOnly') : t('needsRestart')),
+                ));
               }),
             ));
-            body.push(h('p', { key: 'checked', className: 'dsw-rst-status' }, t('updatesChecked', { checked: state.updatesChecked })));
+            body.push(h('p', { key: 'summary', className: 'dsw-rst-status' },
+              t('selected', { count: selectedCount })
+              + ' · ' + t('selectHint')
+              + ' · ' + t('updatesChecked', { checked: state.updatesChecked })
+              + (state.updatesIgnored > 0 ? ' · ' + t('ignoredNote', { count: state.updatesIgnored }) : '')));
           }
 
-          const status = state.updatesPhase === 'updating' ? t('updating') : null;
+          const refreshinPlace = checking && rows.length > 0;
+          const status = state.updatesPhase === 'updating'
+            ? t('updating')
+            : refreshinPlace ? t('checkingNow') : null;
 
-          return h('div', {
-            className: 'dsw-rst-backdrop',
-            onMouseDown: (event) => {
-              if (event.target === event.currentTarget) closeUpdates();
-            },
-          },
-          h('div', {
-            className: 'dsw-rst-card dsw-rst-card-wide',
-            role: 'dialog',
-            'aria-modal': 'true',
-            'aria-labelledby': 'dsw-rst-updates-title',
-          },
-          h('h2', { className: 'dsw-rst-title', id: 'dsw-rst-updates-title' }, t('updatesTitle')),
-          rows.length > 0 && state.updatesPhase !== 'done'
-            ? h('p', { className: 'dsw-rst-intro' }, t('updatesIntro'))
-            : null,
-          state.updatesError === null ? null : h('p', { className: 'dsw-rst-error', role: 'alert' }, t('updateFailed') + state.updatesError),
-          status === null ? null : h('p', { className: 'dsw-rst-status', role: 'status' }, status),
-          ...body,
-          h('div', { className: 'dsw-rst-rows' },
-            h('div', { className: 'dsw-rst-row' },
+          const head = h('div', { className: 'dsw-rst-head' },
+            h('h2', { className: 'dsw-rst-title', id: 'dsw-rst-updates-title' },
+              view === 'settings' ? t('settingsTitle') : view === 'uninstall' ? t('uninstallTitle') : t('updatesTitle')),
+            view === 'list'
+              ? h('button', {
+                type: 'button',
+                className: 'dsw-rst-iconbtn',
+                title: t('checkNow'),
+                'aria-label': t('checkNow'),
+                'data-spin': checking ? 'true' : 'false',
+                disabled: busy || checking,
+                onClick: () => checkUpdates(true),
+              }, h(RefreshIcon))
+              : null,
+            view === 'list'
+              ? h('button', {
+                type: 'button',
+                className: 'dsw-rst-iconbtn',
+                title: t('settings'),
+                'aria-label': t('settings'),
+                disabled: busy,
+                onClick: openSettings,
+              }, h(SettingsIcon))
+              : h('button', {
+                type: 'button',
+                className: 'dsw-rst-iconbtn',
+                title: t('backToList'),
+                'aria-label': t('backToList'),
+                disabled: settingsBusy || uninstallBusy,
+                onClick: backToList,
+              }, h(BackIcon)),
+          );
+
+          const footer = [];
+          if (view === 'settings') {
+            footer.push(h('div', { key: 'settings-row', className: 'dsw-rst-row' },
+              h('button', {
+                type: 'button',
+                ref: closeRef,
+                className: 'dsw-rst-btn',
+                disabled: settingsBusy,
+                onClick: closeSettings,
+              }, t('cancel')),
+              h('button', {
+                type: 'button',
+                className: 'dsw-rst-btn dsw-rst-btn-primary',
+                disabled: settingsBusy,
+                onClick: saveSettings,
+              }, settingsBusy ? t('saving') : t('save')),
+            ));
+          } else if (view === 'uninstall') {
+            footer.push(h('div', { key: 'uninstall-row', className: 'dsw-rst-row' },
+              h('button', {
+                type: 'button',
+                ref: closeRef,
+                className: 'dsw-rst-btn',
+                disabled: uninstallBusy,
+                onClick: closeUninstall,
+              }, t('cancel')),
+              h('button', {
+                type: 'button',
+                className: 'dsw-rst-btn dsw-rst-btn-primary',
+                disabled: uninstallBusy,
+                onClick: confirmUninstall,
+              }, uninstallBusy ? t('uninstalling') : t('uninstall')),
+            ));
+          } else {
+            footer.push(h('div', { key: 'action-row', className: 'dsw-rst-row' },
               h('button', {
                 type: 'button',
                 ref: closeRef,
                 className: 'dsw-rst-btn',
                 disabled: busy,
                 onClick: closeUpdates,
-              }, state.updatesPhase === 'done' ? t('close') : t('cancel')),
+              }, done ? t('close') : t('cancel')),
               done
                 ? h('button', {
                   type: 'button',
@@ -862,22 +1410,57 @@ body[data-ds-dark-theme] .dsw-rst-badge-warn{--dsw-rst-badge-bg:#f59e0b;--dsw-rs
                 : h('button', {
                   type: 'button',
                   className: 'dsw-rst-btn dsw-rst-btn-primary',
-                  disabled: busy || checking || rows.length === 0,
+                  disabled: busy || checking || selectedCount === 0,
                   onClick: applyUpdates,
-                }, busy ? t('updating') : `${t('updateAction')}${rows.length > 0 ? ` (${rows.length})` : ''}`),
-            ),
-            h('div', { className: 'dsw-rst-row' },
-              h('button', {
-                type: 'button',
-                className: 'dsw-rst-btn dsw-rst-btn-ghost dsw-rst-btn-with-icon',
-                title: t('market'),
-                disabled: busy,
-                onClick: openMarketFromUpdates,
-              },
-              h('span', { className: 'dsw-rst-btn-icon', 'aria-hidden': 'true' }, h(MarketIcon)),
-              t('market')),
-            ),
-          )));
+                }, busy ? t('updating') : t('updateAction') + (selectedCount > 0 ? ' (' + selectedCount + ')' : '')),
+            ));
+            if (!done) {
+              footer.push(h('div', { key: 'market-row', className: 'dsw-rst-row' },
+                h('button', {
+                  type: 'button',
+                  className: 'dsw-rst-btn dsw-rst-btn-ghost dsw-rst-btn-with-icon',
+                  title: t('market'),
+                  disabled: busy,
+                  onClick: openMarketFromUpdates,
+                },
+                h('span', { className: 'dsw-rst-btn-icon', 'aria-hidden': 'true' }, h(MarketIcon)),
+                t('market')),
+              ));
+            }
+          }
+
+          return h('div', {
+            className: 'dsw-rst-backdrop',
+            onMouseDown: (event) => {
+              if (event.target !== event.currentTarget) return;
+              if (view === 'settings') closeSettings();
+              else if (view === 'uninstall') closeUninstall();
+              else closeUpdates();
+            },
+          },
+          h('div', {
+            className: 'dsw-rst-card dsw-rst-card-wide',
+            role: 'dialog',
+            'aria-modal': 'true',
+            'aria-labelledby': 'dsw-rst-updates-title',
+          },
+          head,
+          view === 'list' && rows.length > 0 && state.updatesPhase !== 'done'
+            ? h('p', { key: 'intro', className: 'dsw-rst-intro' }, t('updatesIntro'))
+            : null,
+          state.hostStale && view === 'list'
+            ? h('p', { key: 'stale', className: 'dsw-rst-warn' }, t('hostStaleHint'))
+            : null,
+          state.updatesNotice === null || view !== 'list'
+            ? null
+            : h('p', { key: 'notice', className: 'dsw-rst-status', role: 'status' }, state.updatesNotice),
+          state.updatesError === null || view !== 'list'
+            ? null
+            : h('p', { key: 'error', className: 'dsw-rst-error', role: 'alert' }, t('updateFailed') + state.updatesError),
+          status === null ? null : h('p', { key: 'status', className: 'dsw-rst-status', role: 'status' }, status),
+          ...body,
+          h('div', { className: 'dsw-rst-rows' }, ...footer),
+          ));
         }
 
         /**

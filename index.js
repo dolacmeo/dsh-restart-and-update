@@ -15,11 +15,13 @@
  * run one plugin update, which is how `dshmarket` itself gets updated: the market
  * cannot replace itself while it is the running bundle.
  */
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { basename, dirname, join, resolve } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
+import { POSIX_WORKER_SCRIPT, desktopCliPath, relaunchSupport, selfUpdateCommandLine } from './lib/relaunch.js'
+import { normalizeBlacklist, readSettings, settingsPath, writeSettings } from './lib/settings.js'
 import { startWindowState } from './lib/window-state.js'
 
 const PREFIX = '/dsh-restart-and-update'
@@ -29,18 +31,24 @@ const WORK_DIR = join(tmpdir(), 'dsh-restart-and-update')
 const GUARD_HEADER = 'x-dsh-restart-and-update'
 const GUARD_VALUE = 'full'
 
-/** Relaunching a bare node process is out of scope; only the desktop app restarts. */
-const RESTARTABLE = process.platform === 'win32' && !/^node(\.exe)?$/i.test(basename(process.execPath))
+/**
+ * Relaunching a bare node process is out of scope: the desktop app is what the
+ * restart button replaces. The desktop app ships for Windows, macOS and Linux,
+ * and all three are supported - POSIX through a detached shell worker, Windows
+ * through the WMI worker below.
+ */
+const RUNTIME = relaunchSupport()
+const RESTARTABLE = RUNTIME.supported
 
 /** The plugin that must be updated from outside, because it owns the running bundle. */
 const SELF_HOST_PACKAGE = 'dshmarket'
 
-const WORKER_SCRIPT = String.raw`param(
+export const WORKER_SCRIPT = String.raw`param(
   [Parameter(Mandatory=$true)][int]$StartPid,
   [Parameter(Mandatory=$true)][string]$ExePath,
   [Parameter(Mandatory=$true)][string]$LogPath,
   [string]$UpdateCommandBase64 = '',
-  [int]$UpdateTimeoutSeconds = 180
+  [int]$UpdateTimeoutSeconds = 120
 )
 
 $ErrorActionPreference = 'SilentlyContinue'
@@ -74,29 +82,8 @@ if ($UpdateCommandBase64 -ne '') {
   try { $UpdateCommand = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($UpdateCommandBase64)) } catch { }
 }
 
-# Optional pre-restart plugin update: the market bundle cannot replace itself while
-# it is running, so the detached worker does it before the app goes away.
-if ($UpdateCommand -ne '') {
-  Write-Log 'update-start'
-  $updateWork = Start-Process -FilePath $env:ComSpec -ArgumentList ('/d /c ' + $UpdateCommand) -PassThru -WindowStyle Hidden
-  $updateDone = $false
-  $updateDeadline = (Get-Date).AddSeconds($UpdateTimeoutSeconds)
-  while ((Get-Date) -lt $updateDeadline) {
-    if ($updateWork.HasExited) { $updateDone = $true; break }
-    Start-Sleep -Milliseconds 500
-  }
-  if (-not $updateDone) {
-    Write-Log 'update-timeout-killing'
-    try { & taskkill.exe /PID $updateWork.Id /T /F | Out-Null } catch { }
-  }
-  Write-Log ('update-exit=' + $updateWork.ExitCode + ' completed=' + $updateDone)
-} else {
-  Write-Log 'update-skipped'
-}
-
-Start-Sleep -Milliseconds 1500
-
-# The topmost ancestor carrying the application image is the shell's main process.
+# 1. Stop the old app FIRST. The user is waiting for the window to close, and an
+#    update below must not run while the app still holds the profile's files.
 $leaf = Split-Path -Leaf $ExePath
 $target = 0
 $cursor = $StartPid
@@ -117,6 +104,37 @@ while ((Get-Process -Id $target -ErrorAction SilentlyContinue) -and ((Get-Date) 
 }
 Write-Log 'old-process-gone'
 Start-Sleep -Milliseconds 900
+
+# 2. Optional pre-relaunch update: the market bundle cannot replace itself while
+#    it is running, so it is replaced here - after the app is gone. A timeout
+#    always falls through to the relaunch: no update is worth a lost app.
+if ($UpdateCommand -ne '') {
+  Write-Log 'update-start'
+  $updateWork = $null
+  try {
+    $updateWork = Start-Process -FilePath $env:ComSpec -ArgumentList ('/d /c ' + $UpdateCommand) -PassThru -WindowStyle Hidden
+  } catch {
+    Write-Log ('update-start-failed: ' + $_.Exception.Message)
+  }
+  if ($null -eq $updateWork) {
+    Write-Log 'update-skipped-after-failure'
+  } else {
+    $updateDone = $false
+    $updateDeadline = (Get-Date).AddSeconds($UpdateTimeoutSeconds)
+    while ((Get-Date) -lt $updateDeadline) {
+      if ($updateWork.HasExited) { $updateDone = $true; break }
+      Start-Sleep -Milliseconds 500
+    }
+    if (-not $updateDone) {
+      Write-Log 'update-timeout-killing'
+      try { & taskkill.exe /PID $updateWork.Id /T /F | Out-Null } catch { }
+    }
+    Write-Log ('update-exit=' + $updateWork.ExitCode + ' completed=' + $updateDone)
+  }
+} else {
+  Write-Log 'update-skipped'
+}
+Start-Sleep -Milliseconds 400
 
 if (-not (Test-Path -LiteralPath $ExePath)) {
   Write-Log 'exe-missing-abort'
@@ -289,12 +307,6 @@ function profileName(dir) {
   const fromEnv = process.env.DSH_PROFILE
   if (typeof fromEnv === 'string' && fromEnv !== '') return fromEnv
   return dir === undefined ? null : basename(dir)
-}
-
-/** The dsh launcher that ships beside this Host, used for profile package commands. */
-function desktopCliPath() {
-  const exeDir = dirname(process.execPath)
-  return join(exeDir, 'resources', 'runtime', 'cli', 'bin', 'dsh.cmd')
 }
 
 function commandExists(path) {
@@ -474,18 +486,34 @@ async function hasHostHalf(dir, name) {
  * Every installed plugin the registry knows a newer version for, with both
  * publish times. A registry failure for one package never fails the list.
  *
- * `needsRestart` is what the restart button warns about: updating a plugin with a
- * Host half leaves the running process serving the module it imported at boot, so
- * a full restart is required; a client-only plugin takes effect on reload.
+ * `needsRestart` describes how the update takes effect, and it is not the same
+ * question as "does this package have a Host half". A Host-half package keeps
+ * running the module it imported at boot, but this Host can hand the changed
+ * files to the running composition through the profile HMR service (DSH's own
+ * update path does exactly that). Only when that service is absent - an older
+ * Host, or a CLI host without `--expose-internals` - does the whole app have to
+ * restart. So the answer is computed, never assumed: `hotApply` is true when
+ * this process can reconcile the profile after installing.
+ *
+ * `refresh` drops the registry cache first, which is what the refresh button in
+ * the dialog asks for.
  */
-async function checkUpdates() {
+async function checkUpdates({ hotApply = false, refresh = false } = {}) {
   const { dir, profile, plugins } = await installedPlugins()
+  const settings = await readSettings()
+  const blacklist = new Set(settings.blacklist)
   const rows = []
   let checked = 0
+  let ignored = 0
   for (const plugin of plugins) {
     if (plugin.source !== 'npm' || plugin.installedVersion === null) continue
+    if (blacklist.has(plugin.name)) {
+      ignored += 1
+      continue
+    }
     checked += 1
     try {
+      if (refresh) packumentCache.delete(plugin.name)
       const meta = await packument(plugin.name)
       if (meta.latest === null) continue
       const order = compareVersions(meta.latest, plugin.installedVersion)
@@ -497,7 +525,10 @@ async function checkUpdates() {
         installedAt: meta.time[plugin.installedVersion] ?? null,
         latestVersion: meta.latest,
         latestAt: meta.time[meta.latest] ?? null,
-        needsRestart: hostHalf,
+        // A client-only plugin takes effect on reload; a Host-half one takes
+        // effect live only where the Host can reconcile, otherwise on restart.
+        hostHalf,
+        needsRestart: hostHalf && !hotApply,
       })
     } catch {
       // A package the registry does not know is not an update.
@@ -515,7 +546,18 @@ async function checkUpdates() {
   return {
     profile,
     profileName: profileName(dir),
+    hotApply,
     checked,
+    // Blacklisted packages are skipped entirely: they are neither listed nor counted.
+    ignored,
+    // Every installed package, for the blacklist editor in the settings page.
+    installed: plugins.map((plugin) => ({
+      name: plugin.name,
+      installedVersion: plugin.installedVersion,
+      source: plugin.source,
+      blacklisted: blacklist.has(plugin.name),
+    })),
+    settings,
     // `updatable` drives the update button's badge.
     updatable: available.length,
     // `pending` drives the restart button's badge: applied or queued, not loaded.
@@ -549,25 +591,33 @@ const UPDATE_LOG_LIMIT = 2000
  * quoted here rather than interpolated into the shell's own parsing.
  */
 function runLauncher(cli, args, timeout) {
+  const windows = process.platform === 'win32'
   return new Promise((done) => {
+    const finish = (error, stdout, stderr) => {
+      done({
+        ok: error === null,
+        exitCode: error === null ? 0 : (typeof error.code === 'number' ? error.code : 1),
+        output: String(stdout ?? '').slice(-UPDATE_LOG_LIMIT) + String(stderr ?? '').slice(-UPDATE_LOG_LIMIT),
+      })
+    }
+    const options = {
+      windowsHide: true,
+      timeout,
+      maxBuffer: 8 * 1024 * 1024,
+      env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    }
+    if (!windows) {
+      /* POSIX: the launcher is a shell script with a shebang, so it is executed
+         directly - there is no cmd.exe to route it through. */
+      execFile(cli, args, options, finish)
+      return
+    }
     const commandLine = [`"${cli}"`, ...args.map((arg) => `"${arg}"`)].join(' ')
     execFile(
       process.env.ComSpec ?? 'cmd.exe',
       ['/d', '/s', '/c', `"${commandLine}"`],
-      {
-        windowsHide: true,
-        timeout,
-        maxBuffer: 8 * 1024 * 1024,
-        env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
-        windowsVerbatimArguments: true,
-      },
-      (error, stdout, stderr) => {
-        done({
-          ok: error === null,
-          exitCode: error === null ? 0 : (typeof error.code === 'number' ? error.code : 1),
-          output: String(stdout ?? '').slice(-UPDATE_LOG_LIMIT) + String(stderr ?? '').slice(-UPDATE_LOG_LIMIT),
-        })
-      },
+      { ...options, windowsVerbatimArguments: true },
+      finish,
     )
   })
 }
@@ -577,7 +627,7 @@ function runLauncher(cli, args, timeout) {
  * time so a failure names the package that caused it. The dsh CLI is the same
  * path the market itself uses; nothing here invents a second installer.
  */
-async function updatePlugins(names) {
+async function updatePlugins(names, { hotApply = false, reconcile = null } = {}) {
   const cli = desktopCliPath()
   if (!(await commandExists(cli))) {
     throw Object.assign(new Error('the dsh launcher is not found beside this app'), { code: 'cli-missing' })
@@ -632,19 +682,34 @@ async function updatePlugins(names) {
     })
     if (!results[results.length - 1].ok) break
   }
-  // Record what is now on disk but not yet loaded: only host-half plugins owe a
-  // restart, a client-only one is already served by the next page load. The
-  // market is queued for the restart worker instead of being replaced now.
+  /* What is now on disk but not yet loaded. One reconcile for the whole batch,
+     not one per package: recomposing the profile is the expensive part, and the
+     answer only exists after every install has landed. Without the HMR service
+     the Host keeps the modules it imported at boot, and only a Host-half plugin
+     owes a restart - a client-only one is already served by the next page load.
+     The market is queued for the restart worker instead of being replaced now. */
   const applied = results.filter((row) => row.ok && row.unchanged !== true)
+  const live = hotApply && applied.length > 0 && reconcile !== null
+    ? await reconcile()
+    : null
+  const restarting = new Set()
+  for (const row of applied) {
+    const needsRestart = live !== null && live.ok
+      ? live.pending.has(row.name)
+      : await hasHostHalf(dir, row.name)
+    row.needsRestart = needsRestart
+    if (needsRestart) restarting.add(row.name)
+  }
   if (applied.length > 0 || deferred.length > 0) {
     const pending = await readPending(dir)
     const known = new Map(pending.map((row) => [row.name, row]))
-    for (const row of applied) {
-      const needsRestart = await hasHostHalf(dir, row.name)
-      if (!needsRestart) continue
-      known.set(row.name, {
-        name: row.name,
-        installedVersion: row.installed ?? row.target ?? null,
+    // A package that reconciled live is not pending any more; one that was
+    // pending before is kept until the restart actually happens.
+    for (const name of restarting) {
+      const row = results.find((candidate) => candidate.name === name)
+      known.set(name, {
+        name,
+        installedVersion: row?.installed ?? row?.target ?? null,
         updatedAt: new Date().toISOString(),
       })
     }
@@ -657,10 +722,17 @@ async function updatePlugins(names) {
         deferred: true,
       })
     }
+    // A package that applied live must leave the pending list even if it was
+    // queued before: the running composition already serves the new code.
+    if (live !== null && live.ok) {
+      for (const row of applied) {
+        if (!restarting.has(row.name)) known.delete(row.name)
+      }
+    }
     await writePending([...known.values()], dir)
   }
   const pending = await readPending(dir)
-  return { results, deferred, pendingCount: pending.length }
+  return { results, deferred, pendingCount: pending.length, hotApplied: applied.length > 0 && live !== null && live.ok }
 }
 
 /** The version actually present in the profile's node_modules, or undefined. */
@@ -671,6 +743,104 @@ async function installedVersionOnDisk(dir, name) {
     return typeof manifest.version === 'string' ? manifest.version : undefined
   } catch {
     return undefined
+  }
+}
+
+/**
+ * Ask the running composition to load the files that just landed.
+ *
+ * The profile HMR service compares every module the profile loaded with what is
+ * on disk, stops the stale ones and recomposes the tree from the new bundle
+ * patches — the same operation DSH's own plugin update path performs. It is only
+ * attempted when the service exists; without it (or when it refuses) every
+ * Host-half package is reported as needing a restart, which is the safe answer.
+ *
+ * @returns `ok` false means "assume a restart is required"; `pending` names the
+ *   packages whose old modules could not be replaced and still need one.
+ */
+async function reconcileProfile(ctx) {
+  let hmr = null
+  try {
+    hmr = ctx.get('hmr')
+  } catch {
+    hmr = null
+  }
+  if (hmr === null || typeof hmr !== 'object' || typeof hmr.runExclusive !== 'function') {
+    return { ok: false, pending: new Set() }
+  }
+  try {
+    const outcome = await hmr.runExclusive(() => hmr.reconcileProfile([]))
+    const restartReason = outcome?.restartReason
+    if (typeof restartReason === 'string' && restartReason !== '') {
+      return { ok: false, pending: new Set() }
+    }
+    const pending = new Set()
+    for (const row of Array.isArray(outcome?.pending) ? outcome.pending : []) {
+      const url = typeof row?.url === 'string' ? row.url : ''
+      const match = /[\\/]node_modules[\\/]((?:@[^/\\]+[\\/])?[^/\\]+)[\\/]/.exec(url)
+      if (match !== null) pending.add(match[1].replace(/\\/g, '/'))
+    }
+    return { ok: true, pending }
+  } catch {
+    return { ok: false, pending: new Set() }
+  }
+}
+
+/**
+ * Remove plugins from this profile through the shipped launcher, one at a time
+ * so a failure names the package that caused it. The disk is read back: a
+ * package that is still on disk was not removed, whatever pnpm exited with.
+ */
+async function uninstallPlugins(names, { hotApply = false, reconcile = null } = {}) {
+  const cli = desktopCliPath()
+  if (!(await commandExists(cli))) {
+    throw Object.assign(new Error('the dsh launcher is not found beside this app'), { code: 'cli-missing' })
+  }
+  const { dir, plugins } = await installedPlugins()
+  const profile = profileName(dir)
+  if (profile === null || /[\r\n"%]/.test(profile)) {
+    throw Object.assign(new Error('this Host was started without a usable profile'), { code: 'no-profile' })
+  }
+  const installed = new Map(plugins.map((plugin) => [plugin.name, plugin]))
+  const results = []
+  for (const name of new Set(names)) {
+    const plugin = installed.get(name)
+    if (plugin === undefined) {
+      results.push({ name, ok: false, output: `${name} is not installed` })
+      continue
+    }
+    if (name === 'dsh-restart-and-update') {
+      results.push({ name, ok: false, output: 'this plugin cannot uninstall itself while it is the one asking' })
+      continue
+    }
+    const outcome = await runLauncher(cli, ['plugin', '--profile', profile, 'remove', name], 240000)
+    const remaining = await installedVersionOnDisk(dir, name)
+    results.push({
+      name,
+      ok: outcome.ok && remaining === undefined,
+      exitCode: outcome.exitCode,
+      output: outcome.ok && remaining !== undefined
+        ? `package manager reported success but ${name} is still on disk at ${remaining}`
+        : outcome.output,
+    })
+    if (!results[results.length - 1].ok) break
+  }
+  const removed = new Set(results.filter((row) => row.ok).map((row) => row.name))
+  if (removed.size > 0) {
+    const pending = await readPending(dir)
+    const kept = pending.filter((row) => !removed.has(row.name))
+    if (kept.length !== pending.length) await writePending(kept, dir)
+  }
+  /* Dropping a bundle changes the profile, so a live composition can drop its
+     entries without a restart too. The removed modules were just unlinked, so a
+     failed reconcile simply leaves the unload to the next start. */
+  const live = hotApply && removed.size > 0 && reconcile !== null ? await reconcile() : null
+  const pending = await readPending(dir)
+  return {
+    results,
+    pendingCount: pending.length,
+    removed: [...removed],
+    hotApplied: live !== null && live.ok,
   }
 }
 
@@ -731,9 +901,10 @@ async function selfUpdateCommand() {
   if (profile === null || /[\r\n"%]/.test(profile)) return idle
   const cli = desktopCliPath()
   if (!(await commandExists(cli))) return idle
-  // Every variable part is quoted; `call` keeps cmd.exe from eating the first
-  // quote of a quoted launcher path.
-  const command = `call "${cli}" plugin --profile "${profile}" add "${SELF_HOST_PACKAGE}@${meta.latest}"`
+  // Every variable part is quoted for the shell that will run it: `cmd.exe`
+  // needs `call` so it does not eat the first quote of the launcher path, a
+  // POSIX shell needs plain single quotes.
+  const command = selfUpdateCommandLine({ cli, profile, packageName: SELF_HOST_PACKAGE, version: meta.latest })
   return {
     needed: true,
     dir,
@@ -743,13 +914,20 @@ async function selfUpdateCommand() {
   }
 }
 
-/** Write the two scripts and have WMI start the worker outside this process tree. */
+/**
+ * Start the replacement outside this process tree.
+ *
+ * Windows: the two PowerShell scripts below, created detached through WMI.
+ * POSIX: a `sh` worker in its own session, which is all the detachment that
+ * platform needs.
+ */
 async function startRelaunch(updateCommand = '') {
   await mkdir(WORK_DIR, { recursive: true })
   const stamp = `${Date.now()}-${process.pid}`
+  const logPath = join(WORK_DIR, `restart-${stamp}.log`)
+  if (process.platform !== 'win32') return startPosixRelaunch(updateCommand, stamp, logPath)
   const workerPath = join(WORK_DIR, `restart-${stamp}.ps1`)
   const launcherPath = join(WORK_DIR, `launch-${stamp}.ps1`)
-  const logPath = join(WORK_DIR, `restart-${stamp}.log`)
 
   await writeFile(workerPath, WORKER_SCRIPT, 'utf8')
   await writeFile(launcherPath, LAUNCHER_SCRIPT, 'utf8')
@@ -776,6 +954,36 @@ async function startRelaunch(updateCommand = '') {
   return { workerPid: Number(match[1]), logPath }
 }
 
+/**
+ * POSIX relaunch: one `sh` worker in its own session.
+ *
+ * `detached: true` gives the worker a new process group and `unref()` drops it
+ * from this process's bookkeeping, so killing the app cannot take it down. The
+ * worker then waits for the old processes to exit before starting the
+ * replacement - a cold start that raced the old listener is the classic
+ * "restart did nothing" bug.
+ */
+async function startPosixRelaunch(updateCommand, stamp, logPath) {
+  const workerPath = join(WORK_DIR, `restart-${stamp}.sh`)
+  await writeFile(workerPath, POSIX_WORKER_SCRIPT, { encoding: 'utf8', mode: 0o700 })
+  const encoded = updateCommand === '' ? '' : Buffer.from(updateCommand, 'utf8').toString('base64')
+  /* An AppImage runs from a squashfs mount that disappears with the process, so
+     its execPath cannot be started again; the image file can. */
+  const relaunchExe = process.platform === 'linux'
+    && typeof process.env.APPIMAGE === 'string'
+    && process.env.APPIMAGE !== ''
+    ? process.env.APPIMAGE
+    : process.execPath
+  const child = spawn(
+    '/bin/sh',
+    [workerPath, String(process.pid), String(process.ppid), relaunchExe, logPath, encoded],
+    { detached: true, stdio: 'ignore', cwd: WORK_DIR },
+  )
+  if (child.pid === undefined) throw new Error('detached worker was not created')
+  child.unref()
+  return { workerPid: child.pid, logPath }
+}
+
 export const inject = ['webServer']
 
 export function apply(ctx) {
@@ -785,25 +993,73 @@ export function apply(ctx) {
      through Win32 instead: restore it before it is first shown, then keep
      recording. Disabled anywhere else, where there is no Desktop window. */
   let windowGeometry = null
-  if (RESTARTABLE) {
+  /* Restoring the window is a Windows feature: Win32 (through the desktop
+     runtime's koffi) is the only window geometry this plugin can read and write.
+     The preference is still stored everywhere, so it survives moving between
+     machines; the settings page reports it as unavailable elsewhere. */
+  const windowStateSupported = process.platform === 'win32' && RESTARTABLE
+
+  const stopWindowTracking = async () => {
+    const handle = windowGeometry
+    windowGeometry = null
+    await handle?.dispose()
+  }
+
+  const startWindowTracking = () => {
+    if (!windowStateSupported || windowGeometry !== null) return
+    let log
+    try {
+      log = ctx.logger('window-geometry')
+    } catch {}
+    try {
+      windowGeometry = startWindowState({ log }) ?? null
+    } catch (error) {
+      windowGeometry = null
+      log?.warn?.('window geometry could not start: '
+        + (error instanceof Error ? error.message : String(error)))
+    }
+  }
+
+  if (windowStateSupported) {
     ctx.effect(() => {
-      let log
-      try {
-        log = ctx.logger('window-geometry')
-      } catch {}
-      try {
-        windowGeometry = startWindowState({ log }) ?? null
-      } catch (error) {
-        windowGeometry = null
-        log?.warn?.('window geometry could not start: '
-          + (error instanceof Error ? error.message : String(error)))
-      }
+      let disposed = false
+      /* The setting has to be read before the window is shown, which is what
+         startWindowState does with the saved rect: the restore happens while the
+         window is still hidden, so no position is ever flashed. */
+      readSettings().then((settings) => {
+        if (!disposed && settings.restoreWindow) startWindowTracking()
+      }).catch(() => {})
       return async () => {
-        const handle = windowGeometry
-        windowGeometry = null
-        await handle?.dispose()
+        disposed = true
+        await stopWindowTracking()
       }
     }, 'restart-plugin: window geometry')
+  }
+
+  /** Apply a freshly saved `restoreWindow` without waiting for a restart. */
+  const applyWindowSetting = async (enabled) => {
+    if (!windowStateSupported) return
+    if (enabled) startWindowTracking()
+    else await stopWindowTracking()
+  }
+
+  /**
+   * Whether this process can load updated files without a restart.
+   * The profile HMR service is what DSH's own update path uses; older Hosts and
+   * CLI hosts without `--expose-internals` do not have it.
+   */
+  const canApplyLive = () => {
+    try {
+      const hmr = ctx.get('hmr')
+      if (hmr === null || typeof hmr !== 'object' || typeof hmr.runExclusive !== 'function') return false
+      /* The service refuses to compare modules when the runtime keeps no ESM
+         cache (a packed worker loader); a reconcile there always reports a
+         restart, so the update list must not promise the live path. */
+      if (typeof hmr.hasEsmCache === 'function' && hmr.hasEsmCache() === false) return false
+      return true
+    } catch {
+      return false
+    }
   }
 
   const state = () => ({
@@ -812,6 +1068,10 @@ export function apply(ctx) {
     platform: process.platform,
     exe: process.execPath,
     canRestart: RESTARTABLE,
+    restartMode: process.platform === 'win32' ? 'detached-powershell' : (RESTARTABLE ? 'detached-sh' : 'none'),
+    canApplyLive: canApplyLive(),
+    windowStateSupported,
+    settingsFile: settingsPath(),
     pid: process.pid,
     selfHostPackage: SELF_HOST_PACKAGE,
     windowState: windowGeometry?.snapshot() ?? null,
@@ -860,7 +1120,13 @@ export function apply(ctx) {
       if ((req.method ?? 'GET') !== 'GET') return sendJson(res, 405, { ok: false, message: 'method not allowed' })
       if (!sameOrigin(req)) return sendJson(res, 403, { ok: false, message: 'foreign origin' })
       try {
-        const summary = await checkUpdates()
+        const query = (req.url ?? '').split('?')[1] ?? ''
+        const summary = await checkUpdates({
+          hotApply: canApplyLive(),
+          // The refresh button in the dialog means "ask the registry again",
+          // not "return what was cached ten minutes ago".
+          refresh: new URLSearchParams(query).get('refresh') === '1',
+        })
         sendJson(res, 200, { ok: true, ...summary })
       } catch (error) {
         sendJson(res, 500, {
@@ -871,6 +1137,107 @@ export function apply(ctx) {
       }
     },
   }), 'restart-plugin: updates route')
+
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: `${PREFIX}/settings`,
+    handler: async (req, res) => {
+      const method = req.method ?? 'GET'
+      if (method !== 'GET' && method !== 'POST') return sendJson(res, 405, { ok: false, message: 'method not allowed' })
+      if (!sameOrigin(req)) return sendJson(res, 403, { ok: false, message: 'foreign origin' })
+      if (method === 'GET') {
+        const settings = await readSettings()
+        return sendJson(res, 200, {
+          ok: true,
+          settings,
+          settingsFile: settingsPath(),
+          windowStateSupported,
+          canRestart: RESTARTABLE,
+          canApplyLive: canApplyLive(),
+        })
+      }
+      if (req.headers[GUARD_HEADER] !== GUARD_VALUE) {
+        return sendJson(res, 403, { ok: false, message: 'missing confirmation header' })
+      }
+      let body = {}
+      try {
+        const { text, overflow } = await readBody(req)
+        if (overflow) return sendJson(res, 413, { ok: false, code: 'body-too-large', message: 'request body is too large' })
+        const parsed = JSON.parse(text || '{}')
+        body = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}
+      } catch {
+        return sendJson(res, 400, { ok: false, code: 'bad-request', message: 'body must be JSON' })
+      }
+      try {
+        const current = await readSettings()
+        const next = {
+          blacklist: Array.isArray(body.blacklist) ? normalizeBlacklist(body.blacklist) : current.blacklist,
+          restoreWindow: typeof body.restoreWindow === 'boolean' ? body.restoreWindow : current.restoreWindow,
+        }
+        const saved = await writeSettings(next)
+        // The window tracker starts at boot; applying the toggle now means the
+        // user does not have to restart once more to see it take effect.
+        await applyWindowSetting(saved.restoreWindow)
+        sendJson(res, 200, { ok: true, settings: saved, settingsFile: settingsPath(), windowStateSupported })
+      } catch (error) {
+        sendJson(res, 500, {
+          ok: false,
+          code: 'settings-failed',
+          message: error instanceof Error ? error.message : String(error),
+        })
+      }
+    },
+  }), 'restart-plugin: settings route')
+
+  ctx.effect(() => ctx.webServer.register({
+    kind: 'exact',
+    path: `${PREFIX}/uninstall`,
+    handler: async (req, res) => {
+      if ((req.method ?? 'GET') !== 'POST') return sendJson(res, 405, { ok: false, message: 'method not allowed' })
+      if (!sameOrigin(req)) return sendJson(res, 403, { ok: false, message: 'foreign origin' })
+      if (req.headers[GUARD_HEADER] !== GUARD_VALUE) {
+        return sendJson(res, 403, { ok: false, message: 'missing confirmation header' })
+      }
+      let names = []
+      try {
+        const { text, overflow } = await readBody(req)
+        if (overflow) return sendJson(res, 413, { ok: false, code: 'body-too-large', message: 'request body is too large' })
+        const body = JSON.parse(text || '{}')
+        const valid = body !== null && typeof body === 'object' && !Array.isArray(body)
+        names = valid && Array.isArray(body.names)
+          ? body.names.filter((name) => typeof name === 'string' && name !== '')
+          : []
+      } catch {
+        return sendJson(res, 400, { ok: false, code: 'bad-request', message: 'body must be JSON' })
+      }
+      if (names.length === 0) return sendJson(res, 400, { ok: false, code: 'no-targets', message: 'no package names given' })
+      if (rejectBusy(res)) return
+      operation = 'uninstall'
+      try {
+        const { results, removed, pendingCount, hotApplied } = await uninstallPlugins(names, {
+          hotApply: canApplyLive(),
+          reconcile: () => reconcileProfile(ctx),
+        })
+        const failed = results.find((result) => !result.ok)
+        if (failed !== undefined) {
+          return sendJson(res, 500, {
+            ok: false,
+            code: 'uninstall-failed',
+            message: failed.output.trim() || `${failed.name} could not be removed`,
+            results,
+            removed,
+            pendingCount,
+          })
+        }
+        sendJson(res, 200, { ok: true, results, removed, pendingCount, restartRequired: !hotApplied, hotApplied })
+      } catch (error) {
+        const code = (error && error.code) || 'uninstall-failed'
+        sendJson(res, 500, { ok: false, code, message: error instanceof Error ? error.message : String(error) })
+      } finally {
+        operation = null
+      }
+    },
+  }), 'restart-plugin: uninstall route')
 
   ctx.effect(() => ctx.webServer.register({
     kind: 'exact',
@@ -921,8 +1288,22 @@ export function apply(ctx) {
       if (rejectBusy(res)) return
       operation = 'update'
       try {
+        // A blacklisted package is ignored by the check, so updating one is not
+        // a normal request; refuse it instead of quietly doing it.
+        const { blacklist } = await readSettings()
+        const blocked = names.filter((name) => blacklist.includes(name))
+        if (blocked.length > 0) {
+          return sendJson(res, 400, {
+            ok: false,
+            code: 'blacklisted',
+            message: `${blocked.join(', ')} is in the plugin update blacklist`,
+          })
+        }
         await resolveTargets(names)
-        const { results, deferred, pendingCount } = await updatePlugins(names)
+        const { results, deferred, pendingCount, hotApplied } = await updatePlugins(names, {
+          hotApply: canApplyLive(),
+          reconcile: () => reconcileProfile(ctx),
+        })
         const failed = results.find((result) => !result.ok)
         if (failed !== undefined) {
           return sendJson(res, 500, {
@@ -934,7 +1315,7 @@ export function apply(ctx) {
             pendingCount,
           })
         }
-        sendJson(res, 200, { ok: true, results, deferred, pendingCount, restartRequired: pendingCount > 0 })
+        sendJson(res, 200, { ok: true, results, deferred, pendingCount, restartRequired: pendingCount > 0, hotApplied })
       } catch (error) {
         const code = (error && error.code) || 'update-failed'
         sendJson(res, 400, { ok: false, code, message: error instanceof Error ? error.message : String(error) })
