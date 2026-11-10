@@ -7,6 +7,41 @@ window.__ModuleLoader__.load({
     const NS = 'dsh-restart-and-update';
     const ROUTE = '/dsh-restart-and-update';
 
+    /* page-reload:start
+       How this page gets a newer document.
+
+       A plain `location.reload()` is not enough. The document it returns can be
+       answered from an Electron cache entry instead of the Host, and a stale
+       document carries an old `__DSH_BOOT__` - the startup graph the page was
+       built with. Every plugin bundle address in that graph is revision-stamped
+       and immutable, so the Host answers 404 for every plugin whose bundle
+       changed since, the page reports "N entries did not activate", and the
+       Desktop shell treats that as a boot crash and restarts the whole app.
+       Addressing the document with a one-off query makes the reload a URL no
+       cache entry can answer for. */
+    const freshDocumentUrl = (href) => {
+      try {
+        const url = new URL(href);
+        url.searchParams.set('dsh-reload', String(Date.now()));
+        return url.href;
+      } catch {
+        return null;
+      }
+    };
+    /** The graph revision this document booted with, or null when the shell published none. */
+    const bootedGraphRev = () => {
+      try {
+        const boot = window.__DSH_BOOT__;
+        return boot && typeof boot.rev === 'string' && boot.rev !== '' ? boot.rev : null;
+      } catch {
+        return null;
+      }
+    };
+    /** Whether this document is older than the plugin graph the Host serves right now. */
+    const staleBootGraph = (bootRev, liveRev) => typeof bootRev === 'string' && typeof liveRev === 'string'
+      && bootRev !== '' && liveRev !== '' && bootRev !== liveRev;
+    /* page-reload:end */
+
     const COPY = {
       zh: {
         restart: '重启',
@@ -705,7 +740,10 @@ body[data-ds-dark-theme] .dsw-rst-warn{color:#fbbf24}
           if (store.phase !== 'idle') return;
           patch({ phase: 'gui' });
           window.setTimeout(() => {
-            window.location.reload();
+            /* A fresh document, never a cached one: see the page-reload helpers. */
+            const target = freshDocumentUrl(window.location.href);
+            if (target === null) window.location.reload();
+            else window.location.replace(target);
           }, 180);
         };
 
@@ -1618,6 +1656,52 @@ body[data-ds-dark-theme] .dsw-rst-warn{color:#fbbf24}
           id: 'restart-market-sheet',
           order: 902,
         }, MarketDialog));
+
+        /* A document can also come up against a graph the Host already replaced:
+           a reload answered from a cache entry, or a window restored after the
+           plugin set changed. This page cannot repair the graph it booted, so it
+           asks once for a document no cache can answer. One attempt per minute
+           keeps a Host that keeps changing from turning the window into a reload
+           loop. */
+        ctx.effect(() => {
+          const HEAL_KEY = 'dsh-restart-and-update:stale-boot';
+          const HEAL_WINDOW_MS = 60000;
+          const heal = () => {
+            const bootRev = bootedGraphRev();
+            if (bootRev === null) return;
+            fetch(`${ROUTE}/state`, { headers: { accept: 'application/json' } })
+              .then(async (response) => {
+                if (!response.ok) return;
+                const body = await response.json().catch(() => null);
+                const liveRev = body && body.ok === true && typeof body.graphRev === 'string' ? body.graphRev : null;
+                if (!staleBootGraph(bootRev, liveRev)) return;
+                let last = 0;
+                try {
+                  last = Number(window.sessionStorage.getItem(HEAL_KEY) || '0') || 0;
+                } catch {
+                  last = 0;
+                }
+                if (Date.now() - last < HEAL_WINDOW_MS) return;
+                const target = freshDocumentUrl(window.location.href);
+                if (target === null) return;
+                try {
+                  window.sessionStorage.setItem(HEAL_KEY, String(Date.now()));
+                } catch {
+                  /* Without sessionStorage the loop guard is gone but the reload
+                     below is still the right answer. */
+                }
+                window.location.replace(target);
+              })
+              .catch(() => {
+                /* Diagnostic only: a Host that cannot answer /state has no graph
+                   revision to be stale against. */
+              });
+          };
+          const timer = window.setTimeout(heal, 1200);
+          return () => {
+            window.clearTimeout(timer);
+          };
+        }, 'restart-plugin: stale boot guard');
 
         /* Check once right after startup, so the badges are there without anyone
            opening a dialog, and again whenever the window comes back to the front

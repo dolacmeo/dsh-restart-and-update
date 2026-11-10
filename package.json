@@ -1,6 +1,6 @@
 {
   "name": "dsh-restart-and-update",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "type": "module",
   "description": "Restart DeepSeek Harness and update its plugins from the sidebar: pick which updates to apply, keep a blacklist for the ones you never want, uninstall from the same list, and reopen the window where it was. · 侧栏一键更新插件与重启 Harness：逐项勾选要更新的插件、维护更新黑名单、直接卸载插件，重启后窗口回到原来的位置。",
   "icon": "./icon.svg",

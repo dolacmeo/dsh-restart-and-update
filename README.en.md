@@ -64,9 +64,17 @@ now:
 
 | Button | What it does | Effect |
 |---|---|---|
-| Restart GUI | `location.reload()` | Reloads the front end and refetches client plugin bundles; the Host, sessions and running turns keep going |
+| Restart GUI | Navigates to the same document with a one-off `?dsh-reload=` | Reloads the front end: a fresh document plus the client plugin bundles; the Host, sessions and running turns keep going |
 | Restart everything | A worker outside the process tree **ends the app first**, optionally updates the market (bounded to 120s), then starts it again | The whole app, Host included, restarts; logs stay in the temp directory |
 | Cancel | Closes the dialog | Nothing |
+
+**Why Restart GUI is not a plain `location.reload()`**: Electron can answer a reload from a cache entry, and a
+stale document carries a stale `__DSH_BOOT__` — the plugin graph the page booted with. Every bundle address on that
+graph is revision-stamped and immutable, so a Host that has been updated can only answer 404 for **each plugin whose
+bundle changed**: the page reports `N entries did not activate`, the desktop shell treats that as a boot crash and
+restarts the whole app. A one-off query makes the reload a URL no cache entry can answer for; if the document is
+still old, the client compares `__DSH_BOOT__.rev` with the Host's `/state` `graphRev` and takes one fresh document
+(at most once a minute).
 
 **Platforms**: the same three the desktop app ships for — Windows, macOS and Linux.
 

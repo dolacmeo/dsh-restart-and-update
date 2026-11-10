@@ -1062,6 +1062,28 @@ export function apply(ctx) {
     }
   }
 
+  /**
+   * Revision of the plugin bundle graph this Host serves to a document opening
+   * now. A page compares it with the revision it booted with: an older boot is
+   * the state that answers 404 for every bundle that changed since, and the
+   * page heals it by asking for a fresh document (see client.js).
+   *
+   * Null where the Host has no client module registry at all - a CLI host, or
+   * a Host older than this field.
+   */
+  const liveGraphRev = () => {
+    try {
+      const clientModules = ctx.get('clientModules')
+      if (clientModules === null || typeof clientModules !== 'object') return null
+      if (typeof clientModules.graph !== 'function') return null
+      const graph = clientModules.graph()
+      if (graph === null || typeof graph !== 'object') return null
+      return typeof graph.rev === 'string' && graph.rev !== '' ? graph.rev : null
+    } catch {
+      return null
+    }
+  }
+
   const state = () => ({
     ok: true,
     plugin: 'dsh-restart-and-update',
@@ -1070,6 +1092,8 @@ export function apply(ctx) {
     canRestart: RESTARTABLE,
     restartMode: process.platform === 'win32' ? 'detached-powershell' : (RESTARTABLE ? 'detached-sh' : 'none'),
     canApplyLive: canApplyLive(),
+    /* The page checks this against the revision it booted with. */
+    graphRev: liveGraphRev(),
     windowStateSupported,
     settingsFile: settingsPath(),
     pid: process.pid,
